@@ -5,7 +5,7 @@
 Turns a Windows laptop into a Wi-Fi router whose only way out is a WireGuard
 (Proton VPN) tunnel:
 
-**Website:** https://wirespot.vercel.app · **Installer:** [WireSpotSetup.exe](https://github.com/svyixiu/WireSpot/releases/latest/download/WireSpotSetup.exe) (Windows 10/11, v0.2.1). The installer link becomes available when a public release is published.
+**Website:** https://wirespot.vercel.app · **Installer:** [WireSpotSetup.exe](https://github.com/svyixiu/WireSpot/releases/latest/download/WireSpotSetup.exe) (Windows 10/11, v0.2.1).
 
     Existing Wi-Fi → laptop → WireGuard (Proton) → Mobile Hotspot → phone / console
 
