@@ -94,10 +94,20 @@ class CustomWindow:
         self._styled_hwnd = 0
         self._icons = []
         self._drag = None
+        self._topmost_job = None
         # taskbar "Close window", Alt+F4
         top.protocol("WM_DELETE_WINDOW", on_close or (lambda: self.hide()))
         top.bind("<FocusIn>", lambda e: e.widget is top and self.on_focus and self.on_focus(True))
         top.bind("<FocusOut>", lambda e: e.widget is top and self.on_focus and self.on_focus(False))
+        top.bind("<Destroy>", lambda e: self._cancel_topmost() if e.widget is top else None, add="+")
+
+    def _cancel_topmost(self) -> None:
+        if self._topmost_job is not None:
+            try:
+                self.top.after_cancel(self._topmost_job)
+            except tk.TclError:
+                pass
+            self._topmost_job = None
 
     # ------------------------------------------------------------ win32
     @property
@@ -196,7 +206,8 @@ class CustomWindow:
             self.anim.run(("win", id(self)), 200, step, curve=ease_out)
             # first appearance: on top of whatever has the focus (e.g. the Explorer window setup was run from)
             self._topmost(True)
-            self.top.after(700, lambda: self.top.winfo_exists() and self._topmost(False))
+            self._cancel_topmost()
+            self._topmost_job = self.top.after(700, lambda: self.top.winfo_exists() and self._topmost(False))
         self.top.lift()
         try:
             self.top.focus_force()
@@ -302,6 +313,7 @@ class CustomWindow:
             return None
 
     def destroy(self) -> None:
+        self._cancel_topmost()
         for h in self._icons:
             try:
                 _u32.DestroyIcon(h)

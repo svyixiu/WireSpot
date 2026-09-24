@@ -19,8 +19,13 @@ Turns a Windows laptop into a Wi-Fi router whose only way out is a WireGuard
    `portable\` folder, it offers to move those VPN profiles over (moved, not copied, so each
    private key exists once). An older WireSpot that won't close is closed for you on request;
    the VPN and hotspot keep running.
-3. Open WireSpot, go to **Profiles → Import a .conf file…**, or just download a Proton
-   WireGuard `.conf`: WireSpot notices it in Downloads and shows a review card.
+3. Get a WireGuard `.conf` from your VPN provider. For Proton VPN, [sign in or create
+   an account](https://account.protonvpn.com/), open **Downloads → WireGuard configuration**,
+   choose Windows and a server in the country you want, then select **Create → Download**.
+   [Proton's official guide](https://protonvpn.com/support/wireguard-configurations) shows
+   the screens. Keep the `.conf` private: it contains a VPN key. In WireSpot, open
+   **Profiles → Import a .conf file…**; new Proton configs in Downloads are also offered
+   as a review card.
 4. Set the hotspot name and password under **Hotspot**, then press **Go live**.
 
 The command line opens from the app (**Open WireSpot CLI**); there is no separate
@@ -45,9 +50,9 @@ no blinking).
 | Page | What it does |
 |---|---|
 | **Devices** | waiting devices (Allow / Block), connected devices (IP, name, device guess, MAC, vendor), blocked and remembered devices |
-| **Profiles** | Proton configs as cards: import, open the VPN folder, make default, go live with a profile |
+| **Profiles** | WireGuard configs as cards: import, open the VPN folder, make default, check endpoint/handshake health, go live with a profile |
 | **Hotspot** | name, password (show/hide), band, security; balanced vs strict protection |
-| **Checks** | Quick, Wi-Fi, VPN, Hotspot, Sharing, Network, Devices and Full checks; save a report |
+| **Checks** | Quick, Wi-Fi, VPN, Hotspot, Sharing, Network, Devices and Full checks; user-started Cloudflare speed test; save a report |
 | **Activity** | what WireSpot did, in the app **and in the CLI** (secrets redacted) |
 | **Settings** | Start with Windows, Go live at startup, Approve new devices, fail-closed guard, DNS lock, watch Downloads, debug logging; open the data folder, the VPN folder, settings.json, the logs, the CLI; **Uninstall** |
 

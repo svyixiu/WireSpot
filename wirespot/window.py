@@ -16,30 +16,32 @@ from __future__ import annotations
 import os
 import time
 import tkinter as tk
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
 
-from . import APP_NAME, VERSION, log, paths, settings as settings_mod, sync
+from . import APP_NAME, VERSION, WEBSITE, log, paths, settings as settings_mod, sync
 from .chrome import CustomWindow
 from .controller import Controller, icon_state
 from .inbox import Candidate
-from .motion import Animator, ScrollArea, lerp_color
+from .motion import Animator, RoundedCard, ScrollArea, lerp_color
 from .panel import WIDTH, BarRow, Header, ItemRow, PanelView, device_icon, dispatch, split_glyph, status_rows
 from .theme import (BG, BORDER, CLAY, CRAIL, CREAM, DIM, INPUT, LIGHT, ROW_HOVER, RULE, SELECTED, SHIMMER, STONE,
                     SURFACE, Fonts)
 
 HEIGHT = 780
 PAGE_TITLES = {"devices": ("Devices", "Who is on the hotspot, and who may use it."),
-               "profiles": ("Profiles", "Proton WireGuard configs. New .conf files in Downloads are offered automatically."),
+               "profiles": ("Profiles", "Choose a WireGuard connection. A new .conf in Downloads can be imported here."),
                "hotspot": ("Hotspot", "What phones see. Applies the next time the hotspot starts."),
-               "checks": ("Checks", "Read-only diagnostics. Nothing here changes your network."),
+               "checks": ("Checks", "Run diagnostics when you need them. A speed test uses network data."),
                "activity": ("Activity", "What WireSpot did - in this app and in the CLI. Keys and passwords are never shown."),
                "settings": ("Settings", "")}
 ALIASES = {"dashboard": "home", "diagnostics": "checks", "log": "activity"}
 DOCTOR_SECTIONS = [("quick", "Quick"), ("wifi", "Wi-Fi"), ("vpn", "VPN"), ("hotspot", "Hotspot"),
                    ("ics", "Sharing"), ("network", "Network"), ("clients", "Devices"), ("full", "Full")]
 TABS = [("home", "", "Home")] + [(k, "", t[0]) for k, t in PAGE_TITLES.items()]      # page keys (tests)
+PROTON_GUIDE = "https://protonvpn.com/support/wireguard-configurations"
 
 
 class PageView(PanelView):
@@ -272,7 +274,9 @@ class MainWindow:
         if key == "settings":
             return s.get("autostart"), tuple(sorted((s.get("settings") or {}).get("behavior", {}).items()))
         if key == "profiles":
-            return tuple(s.get("profiles") or []), (s.get("settings") or {}).get("vpn", {}).get("default_profile")
+            return (tuple(s.get("profiles") or []),
+                    (s.get("settings") or {}).get("vpn", {}).get("default_profile"),
+                    tuple((name, check["title"]) for name, check in sorted(self.ctl.profile_checks.items())))
         return None
 
     # ----------------------------------------------------------------- small widgets
@@ -293,13 +297,9 @@ class MainWindow:
         return v
 
     def _card(self, parent, pad=12) -> tk.Frame:
-        outer = tk.Frame(parent, bg=BORDER)
-        outer.pack(fill="x", pady=(0, 8))
-        inner = tk.Frame(outer, bg=SURFACE)
-        inner.pack(fill="x", padx=1, pady=1)
-        body = tk.Frame(inner, bg=SURFACE)
-        body.pack(fill="x", padx=pad, pady=pad - 3)
-        return body
+        card = RoundedCard(parent, pad=pad)
+        card.pack(fill="x", pady=(0, 8))
+        return card.body
 
     def _chips(self, parent, options, value, on_change) -> tk.Frame:
         f = tk.Frame(parent, bg=BG)
@@ -378,6 +378,13 @@ class MainWindow:
         self.spin_i += 1
         self.header.tick(self.spin_i)
         self.home_view.tick(self.spin_i)
+        if self.page == "checks" and getattr(self, "speed_icon", None) is not None:
+            state = self.ctl.speed_result or {}
+            if state.get("phase") and not state.get("result") and not state.get("error"):
+                try:
+                    self.speed_icon.configure(image=self.page_view.spinner(self.spin_i, SHIMMER, 14))
+                except tk.TclError:
+                    self.speed_icon = None
         if self.page == "activity" and self.spin_i % 5 == 0:
             self._fill_activity()
 
@@ -453,11 +460,25 @@ class MainWindow:
     def _page_profiles(self, p) -> None:
         snap = self.ctl.snap
         v = self.page_view
-        self.page_actions = {"import": self._import_dialog, "folder": self.ctl.open_vpn_folder}
+        self.page_actions = {"import": self._import_dialog, "folder": self.ctl.open_vpn_folder,
+                             "guide": lambda: webbrowser.open(PROTON_GUIDE)}
         v.row(p, "import", "import", "Import a .conf file…", primary=True).frame.pack_configure(padx=0)
         v.row(p, "folder", "folder", "Open the VPN folder", str(paths.VPN_DIR)[-24:]).frame.pack_configure(padx=0)
         default = snap.get("settings", {}).get("vpn", {}).get("default_profile", "")
         profs = snap.get("profile_objs") or []
+        if profs:
+            v.row(p, "guide", "external", "How to get a Proton .conf", "official guide").frame.pack_configure(padx=0)
+        else:
+            self._section(p, "First profile")
+            guide = self._card(p)
+            tk.Label(guide, text="No profiles yet", font=self.f.bold, fg=CREAM, bg=SURFACE,
+                     anchor="w").pack(fill="x")
+            tk.Label(guide, text="Sign in to Proton VPN → Downloads → WireGuard configuration. Choose a server "
+                                 "or country, create the config, then import the downloaded .conf here.",
+                     font=self.f.small, fg=STONE, bg=SURFACE, anchor="w", justify="left",
+                     wraplength=WIDTH - 70).pack(fill="x", pady=(4, 8))
+            v.button(guide, "Proton's step-by-step guide", "external",
+                     lambda: webbrowser.open(PROTON_GUIDE)).pack(anchor="w")
         self._section(p, f"{len(profs)} profile{'s' if len(profs) != 1 else ''}")
         for prof in profs:
             body = self._card(p)
@@ -482,8 +503,17 @@ class MainWindow:
             name = prof.path.name
             v.button(acts, "Go live", "play", lambda n=name: (self.ctl.do("golive", n), self.back()), True).pack(
                 side="left", padx=(0, 6))
+            v.button(acts, "Check", "pulse", lambda n=name: self.ctl.do("profile_probe", n)).pack(
+                side="left", padx=(0, 6))
             if not is_def:
                 v.button(acts, "Make default", "check", lambda n=name: self.ctl.set_default_profile(n)).pack(side="left")
+            check = self.ctl.profile_checks.get(name)
+            if check:
+                color = {"good": CLAY, "warn": SHIMMER, "bad": CRAIL}[check["level"]]
+                tk.Label(body, text=check["title"], font=self.f.bold, fg=color, bg=SURFACE,
+                         anchor="w").pack(fill="x", pady=(8, 0))
+                tk.Label(body, text=check["detail"], font=self.f.small, fg=STONE, bg=SURFACE,
+                         anchor="w", justify="left", wraplength=WIDTH - 70).pack(fill="x", pady=(2, 0))
         for path, why in snap.get("bad_profiles") or []:
             body = self._card(p)
             r = tk.Frame(body, bg=SURFACE)
@@ -606,6 +636,25 @@ class MainWindow:
     def _page_checks(self, p) -> None:
         v = self.page_view
         self.page_actions = {}
+        self._section(p, "Connection speed")
+        speed = self._card(p)
+        tk.Label(speed, text="A quick test of this laptop's connection", font=self.f.bold, fg=CREAM,
+                 bg=SURFACE, anchor="w").pack(fill="x")
+        status_row = tk.Frame(speed, bg=SURFACE)
+        status_row.pack(fill="x", pady=(3, 6))
+        self.speed_icon = tk.Label(status_row, bg=SURFACE)
+        self.speed_icon.pack(side="left", padx=(0, 6))
+        self.speed_status = tk.Label(status_row, text="", font=self.f.small, fg=STONE, bg=SURFACE,
+                                     anchor="w", justify="left", wraplength=WIDTH - 70)
+        self.speed_status.pack(side="left", fill="x", expand=True)
+        active = self.ctl.snap.get("fresh") and icon_state(self.ctl.snap) in ("live", "vpn")
+        v.button(speed, "Run speed test", "pulse", lambda: self.ctl.do("speed_test"),
+                 enabled=active).pack(anchor="w")
+        tk.Label(speed, text="Uses ~6 MB with Cloudflare only when you press Run. Results are estimates.",
+                 font=self.f.small, fg=DIM, bg=SURFACE, anchor="w", justify="left",
+                 wraplength=WIDTH - 70).pack(fill="x", pady=(7, 0))
+        self._render_speed()
+        self._section(p, "Diagnostics")
         row1 = tk.Frame(p, bg=BG)
         row1.pack(fill="x")
         row2 = tk.Frame(p, bg=BG)
@@ -619,6 +668,36 @@ class MainWindow:
         v.button(tools, "Save report", "file", self._save_report).pack(side="left")
         self.report_view = self._text_view(p)
         self._fill_report()
+
+    def _render_speed(self) -> None:
+        label = getattr(self, "speed_status", None)
+        if label is None or not label.winfo_exists():
+            return
+        state = self.ctl.speed_result
+        if not state:
+            text = "Connect the VPN, then run a test to see latency, download and upload."
+            fg = STONE
+            icon = "ring"
+        elif state.get("result"):
+            result = state["result"]
+            text = (f"{result['download_mbps']} Mbps down  ·  {result['upload_mbps']} Mbps up  ·  "
+                    f"{result['latency_ms']:.0f} ms latency")
+            fg = CLAY
+            icon = "check"
+        elif state.get("error"):
+            text, fg = "Unavailable: " + state["error"], CRAIL
+            icon = "alert"
+        else:
+            text, fg = state["phase"] + "…", SHIMMER
+            icon = "spinner"
+        label.configure(text=text, fg=fg)
+        self.speed_icon.configure(image=self.page_view.icon(icon, 14, fg))
+
+    def show_measurement(self, kind: str, _payload) -> None:
+        if kind == "profile" and self.page == "profiles":
+            self.on_snap()
+        elif kind == "speed" and self.page == "checks":
+            self._render_speed()
 
     def show_report(self, section: str, lines: list[str]) -> None:
         self.report = (section, lines)
@@ -702,6 +781,8 @@ class MainWindow:
             "approve": self.ctl.toggle_approval, "watch": toggle("watch_downloads", True),
             "debug": toggle("debug", False), "data": self.ctl.open_data, "vpn": self.ctl.open_vpn_folder,
             "settings_file": self.ctl.open_settings_file, "logs": self.ctl.open_logs, "cli": self.ctl.open_cli,
+            "privacy": lambda: webbrowser.open(f"{WEBSITE}/privacy"),
+            "terms": lambda: webbrowser.open(f"{WEBSITE}/terms"),
             "uninstall": self.ask_uninstall}
 
         def switch(id_, icon, title, desc, on):
@@ -731,6 +812,8 @@ class MainWindow:
         self._kv(p, "version", f"{APP_NAME} {VERSION}")
         self._kv(p, "program", str(paths.APP_DIR))
         self._kv(p, "data", str(paths.BASE))
+        v.row(p, "privacy", "lock", "Privacy Policy", "What stays on your PC").frame.pack_configure(padx=0)
+        v.row(p, "terms", "file", "Terms of Use", "Website, downloads and GPL license").frame.pack_configure(padx=0)
         if paths.is_installed():
             self._section(p, "Remove")
             v.row(p, "uninstall", "trash", "Uninstall WireSpot…", danger=True).frame.pack_configure(padx=0)

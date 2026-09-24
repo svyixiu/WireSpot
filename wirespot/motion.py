@@ -4,10 +4,29 @@ from __future__ import annotations
 
 import time
 import tkinter as tk
+import math
+import os
 
-from .theme import BG
+from .theme import BG, BORDER, SURFACE
 
-FRAME_MS = 12
+FRAME_MS = 16
+
+
+def motion_enabled() -> bool:
+    """Follow the Windows animation preference; tests can request reduced motion."""
+    if os.environ.get("WIRESPOT_REDUCED_MOTION") == "1":
+        return False
+    if os.name == "nt":
+        try:
+            import ctypes
+
+            enabled = ctypes.c_int(1)
+            # SPI_GETCLIENTAREAANIMATION
+            if ctypes.windll.user32.SystemParametersInfoW(0x1042, 0, ctypes.byref(enabled), 0):
+                return bool(enabled.value)
+        except (AttributeError, OSError):
+            pass
+    return True
 
 
 def ease_out(t: float) -> float:
@@ -30,9 +49,20 @@ class Animator:
     def __init__(self, root: tk.Misc):
         self.root = root
         self.jobs: dict = {}
+        self.enabled = motion_enabled()
+        self.root.bind("<Destroy>", lambda event: self.close() if event.widget is self.root else None, add="+")
+
+    def close(self) -> None:
+        for key in tuple(self.jobs):
+            self.cancel(key)
 
     def run(self, key, duration_ms: int, step, done=None, curve=ease_out) -> None:
         self.cancel(key)
+        if not self.enabled or duration_ms <= 0:
+            step(1.0)
+            if done:
+                done()
+            return
         start = time.perf_counter()
 
         def tick():
@@ -85,7 +115,10 @@ class ScrollArea(tk.Frame):
         self.win = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.inner.bind("<Configure>", lambda e: self._region())
         self.canvas.bind("<Configure>", lambda e: (self.canvas.itemconfigure(self.win, width=e.width), self._region()))
-        self.thumb = tk.Frame(self, bg=thumb, width=3)
+        self.thumb = tk.Frame(self, bg=thumb, width=6, cursor="sb_v_double_arrow")
+        self._drag_offset = 0
+        self.thumb.bind("<ButtonPress-1>", self._begin_drag)
+        self.thumb.bind("<B1-Motion>", self._drag)
         self.target = 0.0
 
     def _region(self) -> None:
@@ -99,7 +132,20 @@ class ScrollArea(tk.Frame):
             return
         top = self.canvas.yview()[0]
         th = max(24, int(view * view / h))
-        self.thumb.place(relx=1.0, x=-5, y=int(top * view) + 2, height=th - 4)
+        self.thumb.place(relx=1.0, x=-8, y=int(top * view) + 2, height=th - 4)
+
+    def _begin_drag(self, event) -> None:
+        self.anim.cancel(("scroll", id(self)))
+        self._drag_offset = event.y
+
+    def _drag(self, event) -> None:
+        view, content = self.canvas.winfo_height(), self.inner.winfo_reqheight()
+        if view <= 1 or content <= view:
+            return
+        y = event.y_root - self.canvas.winfo_rooty() - self._drag_offset
+        self.target = min(max(0.0, y / view), 1 - view / content)
+        self.canvas.yview_moveto(self.target)
+        self._thumb()
 
     def wheel(self, delta: int) -> None:
         h = self.inner.winfo_reqheight()
@@ -117,8 +163,61 @@ class ScrollArea(tk.Frame):
         self.anim.run(("scroll", id(self)), 240, step)
 
     def to_top(self) -> None:
+        self.anim.cancel(("scroll", id(self)))
+        self.target = 0.0
         self.canvas.yview_moveto(0)
         self._thumb()
+
+
+class RoundedCard(tk.Canvas):
+    """A rounded Tk card whose contents remain ordinary accessible widgets."""
+
+    def __init__(self, master, *, pad: int = 12, radius: int = 12, fill: str = SURFACE):
+        super().__init__(master, bg=BG, bd=0, highlightthickness=0, width=340, height=40)
+        self.pad, self.radius, self.fill = pad, radius, fill
+        self.body = tk.Frame(self, bg=fill)
+        self.window = self.create_window(pad, pad, anchor="nw", window=self.body)
+        self._height_job = None
+        self.bind("<Configure>", self._resize, add="+")
+        self.body.bind("<Configure>", self._schedule_height, add="+")
+
+    @staticmethod
+    def _points(x0: float, y0: float, x1: float, y1: float, radius: float) -> list[float]:
+        pts = []
+        for cx, cy, start in ((x1 - radius, y0 + radius, -90),
+                              (x1 - radius, y1 - radius, 0),
+                              (x0 + radius, y1 - radius, 90),
+                              (x0 + radius, y0 + radius, 180)):
+            for i in range(9):
+                angle = math.radians(start + i * 90 / 8)
+                pts.extend((cx + radius * math.cos(angle), cy + radius * math.sin(angle)))
+        return pts
+
+    def _schedule_height(self, _event=None) -> None:
+        if self._height_job is None:
+            self._height_job = self.after_idle(self._sync_height)
+
+    def _sync_height(self) -> None:
+        self._height_job = None
+        try:
+            height = self.body.winfo_reqheight() + self.pad * 2
+            if self.winfo_reqheight() != height:
+                self.configure(height=height)
+        except tk.TclError:
+            pass
+
+    def _resize(self, event) -> None:
+        width, height = event.width, event.height
+        self.itemconfigure(self.window, width=max(1, width - self.pad * 2))
+        self.delete("surface")
+        if width < 3 or height < 3:
+            return
+        radius = min(self.radius, width / 2 - 1, height / 2 - 1)
+        self.create_polygon(self._points(0, 0, width, height, radius), fill=BORDER,
+                            outline="", tags="surface")
+        self.create_polygon(self._points(1, 1, width - 1, height - 1, max(1, radius - 1)),
+                            fill=self.fill, outline="", tags="surface")
+        self.tag_lower("surface", self.window)
 
 
 def hover(group: tk.Misc, widgets, on_enter, on_leave) -> None:

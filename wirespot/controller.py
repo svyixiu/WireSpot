@@ -18,7 +18,7 @@ import threading
 import time
 from pathlib import Path
 
-from . import admission, autostart, clients as clients_mod, doctor, log, paths, profiles
+from . import admission, autostart, clients as clients_mod, doctor, log, network_tests, paths, profiles
 from . import settings as settings_mod, sync, ui, wireguard
 from .backend import Backend
 from .inbox import Candidate, Inbox
@@ -117,7 +117,8 @@ def tooltip(snap: dict) -> str:
 
 ACTION_LABELS = {"golive": "Going live", "reconnect": "Reconnecting", "disconnect": "Disconnecting",
                  "pause": "Pausing", "hotspot_on": "Starting the hotspot", "hotspot_off": "Stopping the hotspot",
-                 "check_ip": "Checking exit IP", "doctor": "Running diagnostics", "uninstall": "Uninstalling WireSpot"}
+                 "check_ip": "Checking exit IP", "doctor": "Running diagnostics", "uninstall": "Uninstalling WireSpot",
+                 "profile_probe": "Checking profile", "speed_test": "Measuring connection speed"}
 
 
 class Controller:
@@ -140,6 +141,8 @@ class Controller:
                                       "protection": self.relay.record.protection}, configured=configured)
         self.busy: str | None = None
         self.exit_ip = ("", 0.0)
+        self.profile_checks: dict[str, dict] = {}
+        self.speed_result: dict | None = None
         self.remote = None               # operation the CLI is running right now (sync bus)
         self.bus_rev = -1
         self.toasted_pending: set[str] = set()
@@ -413,6 +416,11 @@ class Controller:
         """Call from the Tk thread."""
         if action in self.INSTANT:
             return getattr(self, action)()
+        if action == "speed_test" and (not self.snap.get("fresh") or
+                                       self.snap.get("state") not in (State.READY.value, State.VPN_CONNECTED.value)):
+            self.events.put(("toast", "Connect the VPN first",
+                             "Speed test measures the laptop's current connection while VPN is connected.", True))
+            return
         if self.busy:
             self.events.put(("toast", "Busy", f"Still working on: {self.busy}", True))
             return
@@ -462,6 +470,32 @@ class Controller:
                 ip = self.backend.public_ip()
                 self.exit_ip = (ip, time.time())
                 title, msg, ok = "Exit IP", ip or "unavailable (no internet?)", bool(ip)
+            elif action == "profile_probe":
+                name = str(arg or "")
+                if not name or Path(name).name != name or not name.lower().endswith(".conf"):
+                    raise ValueError("Choose a profile from the list")
+                profile = profiles.load_profile(paths.VPN_DIR / name)
+                active = name == self.snap.get("profile") and self.snap.get("state") in (
+                    State.READY.value, State.VPN_CONNECTED.value)
+                check = network_tests.profile_health(profile.endpoint, active=active,
+                                                       handshake_age=self.snap.get("handshake") if active else None)
+                self.profile_checks[name] = check
+                self.events.put(("measurement", "profile", name))
+                title, msg, ok = check["title"], check["detail"], check["level"] != "bad"
+            elif action == "speed_test":
+                self.speed_result = {"phase": "Starting", "result": None}
+                self.events.put(("measurement", "speed", self.speed_result))
+
+                def progress(phase):
+                    self.speed_result = {"phase": phase, "result": None}
+                    self.events.put(("measurement", "speed", self.speed_result))
+
+                result = network_tests.speed_test(progress)
+                self.speed_result = {"phase": "Complete", "result": result}
+                self.events.put(("measurement", "speed", self.speed_result))
+                title, msg = "Speed test complete", (
+                    f"{result['download_mbps']} Mbps down · {result['upload_mbps']} Mbps up · "
+                    f"{result['latency_ms']:.0f} ms latency")
             elif action == "uninstall":
                 from . import installer
 
@@ -481,6 +515,9 @@ class Controller:
                 return
         except Exception as e:
             ok, title, msg = False, "Unexpected error", f"{type(e).__name__}: {e}"
+            if action == "speed_test":
+                self.speed_result = {"phase": "Unavailable", "error": str(e), "result": None}
+                self.events.put(("measurement", "speed", self.speed_result))
             log.event("error", f"action {action}: {e}")
         finally:
             self.busy = None

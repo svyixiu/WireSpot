@@ -19,7 +19,7 @@ import tkinter as tk
 
 from . import APP_NAME, VERSION, icons as icons_mod, wireguard
 from .controller import fmt_duration, icon_state
-from .motion import Animator, hover, lerp_color
+from .motion import Animator, RoundedCard, hover, lerp_color
 from .state import State
 from .status import normalize_status
 from .theme import (BG, BORDER, CLAY, CRAIL, CREAM, DIM, LIGHT, ROW_HOVER, RULE, SELECTED, SHIMMER, STATES, STONE,
@@ -530,20 +530,36 @@ class PanelView:
         knob = lerp_color(STONE, CREAM, p)
         return self.icons.wide(("switch", p), icons_mod.switch_doc(p, track, knob), 36, 20)
 
-    def button(self, parent, text, icon, command, primary=False, enabled=True) -> tk.Frame:
+    def button(self, parent, text, icon, command, primary=False, enabled=True) -> tk.Canvas:
+        import tkinter.font as tkfont
+
         bg, hover_bg = ((CLAY, SHIMMER) if primary else (SELECTED, ROW_HOVER)) if enabled else (RULE, RULE)
         fg = (BG if primary else LIGHT) if enabled else DIM
-        b = tk.Frame(parent, bg=bg, cursor="hand2" if enabled else "arrow")
-        ic = tk.Label(b, image=self.icons.get(icon, 12, fg), bg=bg)
-        ic.pack(side="left", padx=(8, 3), pady=3)
-        lb = tk.Label(b, text=text, font=(self.f.mono, 9, "bold"), fg=fg, bg=bg)
-        lb.pack(side="left", padx=(0, 9), pady=3)
-        ws = (b, ic, lb)
+        font = tkfont.Font(root=self.root, family=self.f.mono, size=9, weight="bold")
+        width = font.measure(text) + 40
+        b = tk.Canvas(parent, width=width, height=32, bg=parent.cget("bg"), bd=0, highlightthickness=0,
+                      cursor="hand2" if enabled else "arrow", takefocus=1 if enabled else 0)
+        glyph = self.icons.get(icon, 13, fg)
+        current = {"color": bg}
+
+        def draw(color):
+            b.delete("all")
+            current["color"] = color
+            b.create_polygon(RoundedCard._points(0, 0, width, 32, 7), fill=color, outline="")
+            b.create_image(11, 16, image=glyph, anchor="w")
+            b.create_text(29, 16, text=text, fill=fg, font=font, anchor="w")
+
+        draw(bg)
         if enabled:
-            hover(b, ws, lambda: self.anim.fade(ws, b.cget("bg"), hover_bg, 100, key=("btn", id(b))),
-                  lambda: self.anim.fade(ws, b.cget("bg"), bg, 150, key=("btn", id(b))))
-            for w in ws:
-                w.bind("<ButtonRelease-1>", lambda e: command())
+            def fade(to):
+                start = current["color"]
+                self.anim.run(("btn", id(b)), 130, lambda t: draw(lerp_color(start, to, t)))
+
+            b.bind("<Enter>", lambda _e: fade(hover_bg))
+            b.bind("<Leave>", lambda _e: fade(bg))
+            b.bind("<ButtonRelease-1>", lambda e: command() if 0 <= e.x < width and 0 <= e.y < 32 else None)
+            b.bind("<Return>", lambda _e: command())
+            b.bind("<space>", lambda _e: command())
         return b
 
     # ------------------------------------------------------------ model + render

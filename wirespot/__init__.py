@@ -8,8 +8,8 @@ APP_NAME = "WireSpot"
 TAGLINE = "WireGuard x Mobile Hotspot"
 VERSION = "0.2.1"
 WEBSITE = "https://wirespot.vercel.app"
-TERMS_VERSION = "1"
-PRIVACY_VERSION = "1"
+TERMS_VERSION = "2"
+PRIVACY_VERSION = "2"
 
 # WireGuard tunnel names are limited to 32 chars of [A-Za-z0-9_=+.-].
 TUNNEL_PREFIX = "ws_"

@@ -338,6 +338,16 @@ class TrayPanel:
         self.closed_at = 0.0
         self.spin_i = 0
         self._buttons_down = False
+        self._click_job = None
+        root.bind("<Destroy>", lambda e: self._cancel_click_watch() if e.widget is root else None, add="+")
+
+    def _cancel_click_watch(self) -> None:
+        if self._click_job is not None:
+            try:
+                self.root.after_cancel(self._click_job)
+            except tk.TclError:
+                pass
+            self._click_job = None
 
     @property
     def is_open(self) -> bool:
@@ -421,6 +431,7 @@ class TrayPanel:
         self.top.geometry(f"{WIDTH + 2}x{h}+{self.pos[0]}+{self.pos[1]}")
 
     def close(self) -> None:
+        self._cancel_click_watch()
         if self.top is None:
             return
         top, self.top = self.top, None
@@ -431,6 +442,7 @@ class TrayPanel:
 
     def _watch_clicks(self) -> None:
         """Close on a mouse press outside the panel (polled; focus changes don't close it)."""
+        self._click_job = None
         if self.top is None:
             return
         down = any(user32.GetAsyncKeyState(vk) & 0x8000 for vk in (VK_LBUTTON, VK_RBUTTON, VK_MBUTTON))
@@ -444,7 +456,7 @@ class TrayPanel:
                 self.close()
                 return
         self._buttons_down = down
-        self.root.after(25, self._watch_clicks)
+        self._click_job = self.root.after(25, self._watch_clicks)
 
     # ------------------------------------------------------------ content
     def _action(self, id_: str) -> None:

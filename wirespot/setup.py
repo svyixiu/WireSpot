@@ -26,11 +26,11 @@ from pathlib import Path
 from . import APP_NAME, TAGLINE, VERSION, WEBSITE, TERMS_VERSION, PRIVACY_VERSION, installer, log, oplock, paths
 from .chrome import CustomWindow, force_foreground
 from .icons import IconSet
-from .motion import Animator, ScrollArea
+from .motion import Animator, RoundedCard, ScrollArea
 from .panel import Header, ItemRow, PanelView
 from .theme import BG, CLAY, CRAIL, CREAM, DIM, LIGHT, RULE, SHIMMER, STONE, Fonts
 
-W, H = 422, 600
+W, H = 460, 700
 SETUP_MUTEX = "Local\\WireSpot.Setup"
 TITLE = "WireSpot Setup"
 
@@ -152,6 +152,19 @@ class SetupWindow:
         tk.Label(row, image=self.icons.get(icon, 14, color), bg=BG).pack(side="left", anchor="n", padx=(0, 8), pady=1)
         tk.Label(row, text=text, font=self.f.small, fg=fg, bg=BG, anchor="w", justify="left",
                  wraplength=W - 90).pack(side="left", fill="x")
+
+    def journey(self, parent, number: str, title: str, detail: str) -> None:
+        """One short onboarding step on the welcome page."""
+        row = tk.Frame(parent, bg=BG)
+        row.pack(fill="x", padx=22, pady=3)
+        tk.Label(row, text=number, font=self.f.bold, fg=CLAY, bg=BG, width=3,
+                 anchor="w").pack(side="left", anchor="n")
+        copy = tk.Frame(row, bg=BG)
+        copy.pack(side="left", fill="x", expand=True)
+        tk.Label(copy, text=title, font=self.f.bold, fg=CREAM, bg=BG,
+                 anchor="w").pack(fill="x")
+        tk.Label(copy, text=detail, font=self.f.small, fg=STONE, bg=BG,
+                 anchor="w", justify="left", wraplength=W - 100).pack(fill="x", pady=(1, 0))
 
     def option(self, parent, id_, icon, title, desc, on, cb, **kw) -> ItemRow:
         self.handlers[id_] = cb
@@ -275,24 +288,26 @@ class Installer(SetupWindow):
         p = self.page(direction)
         upd = bool(self.previous) and self.previous != VERSION
         self.header.pill("info", "update" if upd else "setup", SHIMMER)
-        self.hero(p, f"Welcome to {APP_NAME}", f"v{VERSION} · {TAGLINE}")
-        self.para(p, "Share this PC's WireGuard (Proton VPN) connection with devices on a Windows Mobile "
-                     "Hotspot. WireSpot keeps their internet traffic on the tunnel.", pady=(8, 2))
-        self.section(p, "What it does on this PC")
-        self.point(p, "shield", "Runs as administrator to create a WireGuard tunnel and start Mobile Hotspot.")
-        self.point(p, "refresh", "Removes its network changes when you disconnect or uninstall.")
-        self.point(p, "key", "Your VPN keys stay on this PC. Nothing is uploaded.")
-        self.section(p, "Checks")
+        self.hero(p, f"Set up {APP_NAME}", f"v{VERSION} · Your hotspot, through your VPN")
+        self.section(p, "Three steps to go live")
+        self.journey(p, "01", "Install WireGuard for Windows", "The VPN tunnel runs through WireGuard's Windows service.")
+        self.journey(p, "02", "Get a WireGuard .conf", "Create one on your VPN provider's website, then import it in WireSpot.")
+        self.journey(p, "03", "Choose your hotspot", "Name it, set a strong password, and press Go live.")
+        self.view.button(p, "Proton's .conf guide", "external",
+                         lambda: webbrowser.open("https://protonvpn.com/support/wireguard-configurations"))\
+            .pack(anchor="w", padx=22, pady=(4, 0))
+        self.para(p, "Setup needs administrator access for Windows networking. Your VPN keys stay on this PC; "
+                     "WireSpot removes its network changes when you disconnect or uninstall.", fg=STONE,
+                  pady=(8, 0))
+        self.section(p, "Ready check")
         if self.wireguard:
             self.point(p, "check", "WireGuard for Windows is installed.")
         else:
-            self.point(p, "alert", "WireGuard for Windows is not installed. WireSpot installs fine, but you need "
-                                   "it (wireguard.com/install) before going live.", SHIMMER, SHIMMER)
+            self.point(p, "alert", "Install WireGuard for Windows before going live: wireguard.com/install",
+                       SHIMMER, SHIMMER)
         if self.previous:
             self.point(p, "info", f"WireSpot {self.previous} is installed - this {'updates' if upd else 'reinstalls'} "
                                   "it. Your settings and VPN profiles are kept.")
-        else:
-            self.point(p, "check", "Nothing to replace - a fresh install.")
         if installer.app_running():
             self.point(p, "info", "WireSpot is running. Setup closes it; your VPN and hotspot keep running.")
         for child in self.agreement_bar.winfo_children():
@@ -310,7 +325,7 @@ class Installer(SetupWindow):
         label.pack(side="left")
         links = tk.Frame(self.agreement_bar, bg=BG)
         links.pack(fill="x", padx=48)
-        for title, path in (("Privacy Policy", "privacy"), ("Terms of Service", "terms")):
+        for title, path in (("Privacy Policy", "privacy"), ("Terms of Use", "terms")):
             if path == "terms":
                 tk.Label(links, text="and the", font=self.f.small, fg=LIGHT, bg=BG).pack(side="left", padx=(5, 0))
             link = tk.Label(links, text=title, font=self.f.small, fg=CLAY, bg=BG, cursor="hand2")
@@ -343,16 +358,17 @@ class Installer(SetupWindow):
         p = self.page(direction)
         self.header.pill("sliders", "options", SHIMMER)
         tk.Frame(p, bg=BG, height=6).pack()
-        self.section(p, "Where things go")
-        for label, value in (("program", str(paths.install_dir())), ("your data", str(paths.appdata_dir()))):
-            row = tk.Frame(p, bg=BG)
-            row.pack(fill="x", padx=22, pady=1)
-            tk.Label(row, text=f"{label:<10}", font=self.f.small, fg=STONE, bg=BG).pack(side="left", anchor="n")
-            tk.Label(row, text=value, font=self.f.small, fg=LIGHT, bg=BG, anchor="w", justify="left",
-                     wraplength=W - 150).pack(side="left", fill="x")
-        self.para(p, "The data folder holds settings.json, your VPN profiles (vpn\\) and logs. WireSpot's Settings "
-                     "page opens it.", fg=DIM, pady=(4, 0))
-        self.section(p, "Options")
+        self.section(p, "Where WireSpot lives")
+        card = RoundedCard(p, pad=12)
+        card.pack(fill="x", padx=22, pady=(0, 4))
+        for label, value in (("APP", str(paths.install_dir())), ("YOUR DATA", str(paths.appdata_dir()))):
+            tk.Label(card.body, text=label, font=(self.f.mono, 8, "bold"), fg=CLAY, bg=card.fill,
+                     anchor="w").pack(fill="x", pady=(0, 1))
+            tk.Label(card.body, text=value, font=self.f.small, fg=LIGHT, bg=card.fill, anchor="w",
+                     justify="left", wraplength=W - 70).pack(fill="x", pady=(0, 7))
+        self.para(p, "Your data includes settings, VPN profiles and logs. You can open this folder later in Settings.",
+                  fg=DIM, pady=(2, 0))
+        self.section(p, "Make it yours")
 
         def flip(k):
             return lambda: self.opts.__setitem__(k, not self.opts[k])

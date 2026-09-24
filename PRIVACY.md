@@ -1,6 +1,6 @@
 # WireSpot Privacy Policy
 
-Effective 2026-09-24 · Version 1
+Effective 2026-09-24 · Version 2
 
 WireSpot is a local Windows application. It has no accounts, telemetry, analytics, or remote crash reporting. WireSpot does not upload your VPN configuration or device list.
 
@@ -12,7 +12,9 @@ WireSpot also uses `%ProgramData%\WireSpot` for runtime tunnel configurations wi
 
 ## Network connections
 
-The only internet request made by WireSpot itself is an optional exit-IP check to `https://api.ipify.org` or `https://api64.ipify.org`. When connected, that request uses the VPN tunnel, so ipify sees the VPN exit IP. Checks involving `1.1.1.1` and `9.9.9.9` inspect your PC's local routing table; they do not contact those addresses.
+While connected, WireSpot checks your exit IP with `https://api.ipify.org` or `https://api64.ipify.org`; ipify sees the VPN exit IP. Checks involving `1.1.1.1` and `9.9.9.9` inspect your PC's local routing table; they do not contact those addresses.
+
+If you press **Check** on a profile, WireSpot resolves its VPN server address and sends two ICMP ping requests to it. A server may ignore ping, so a missing reply does not prove the profile is broken. If the profile is connected, WireSpot also reads the local WireGuard handshake time. If you press **Run speed test** while connected, WireSpot sends three tiny latency requests, downloads about 5 MB, and uploads 1 MB of generated zero bytes to `https://speed.cloudflare.com` over the laptop's current route without using an HTTP proxy. Cloudflare may see the IP used for that route (normally your VPN exit IP) and request metadata. No VPN key, configuration, device list, or file from your PC is uploaded. These tests do not run in the background.
 
 Your traffic goes to the VPN provider you chose. That provider's privacy policy applies. WireSpot does not send your `.conf` files to the provider or to this website.
 

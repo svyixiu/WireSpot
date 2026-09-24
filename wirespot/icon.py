@@ -1,12 +1,11 @@
-"""WireSpot icon: a casual Wi-Fi mark struck by a lightning bolt.
+"""WireSpot icon: one clear lightning mark on a warm rounded tile.
 
 One geometry drives both outputs, so they always match:
   * ``svg()``      - the vector master (assets/wirespot.svg)
   * ``render()``   - anti-aliased pixels -> multi-size .ico (exe + tray states)
 
-A compact Wi-Fi mark (dot + two arcs) with a lightning bolt striking down
-its right side; a thin gap in the badge colour separates the bolt from the
-arc it cuts. Tray states recolour the same mark (Claude palette only);
+A single bolt stays legible in the taskbar and notification area. Tray states
+recolour the same mark (Claude palette only);
 "paused" swaps the bolt for pause bars, "error" shows "!".
 ``python -m wirespot.icon [out.ico] [out.svg]`` writes both files.
 """
@@ -24,7 +23,7 @@ CREAM = (250, 249, 245)
 DARK = (31, 30, 29)
 STONE = (176, 174, 165)
 
-ICON_VERSION = "2"   # bump when the artwork changes (invalidates cached tray icons)
+ICON_VERSION = "3"   # bump when the artwork changes (invalidates cached tray icons)
 
 # state -> (badge colour, mark colour, bolt colour)
 STYLES = {
@@ -38,13 +37,9 @@ STYLES = {
 
 # ------------------------------------------------------------------ geometry (unit square, y down)
 CORNER, MARGIN = 0.22, 0.04
-ARC_CENTER = (0.40, 0.76)
-DOT_R = 0.085
-ARCS = ((0.18, 0.28), (0.36, 0.46))        # (inner, outer) radius bands
-ARC_HALF_ANGLE = 46                          # degrees either side of straight up
-BOLT = [(0.77, 0.28), (0.57, 0.60), (0.70, 0.60), (0.62, 0.92), (0.88, 0.52), (0.75, 0.52), (0.87, 0.28)]
-BOLT_GAP = 0.045                             # knock-out around the bolt
-PAUSE = ((0.62, 0.70), (0.78, 0.86))         # x ranges of the two pause bars (paused state)
+BOLT = [(0.58, 0.12), (0.29, 0.55), (0.47, 0.55),
+        (0.38, 0.89), (0.73, 0.43), (0.55, 0.43), (0.66, 0.12)]
+PAUSE = ((0.34, 0.45), (0.55, 0.66))         # x ranges of the two pause bars
 
 
 def _rounded_square(x: float, y: float) -> bool:
@@ -67,32 +62,8 @@ def _in_poly(x: float, y: float, poly) -> bool:
     return inside
 
 
-def _dist_to_poly(x: float, y: float, poly) -> float:
-    best = 9.0
-    n = len(poly)
-    for i in range(n):
-        (x1, y1), (x2, y2) = poly[i], poly[(i + 1) % n]
-        dx, dy = x2 - x1, y2 - y1
-        t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)))
-        best = min(best, math.hypot(x - (x1 + t * dx), y - (y1 + t * dy)))
-    return best
-
-
-def _arc(x: float, y: float) -> bool:
-    cx, cy = ARC_CENTER
-    dx, dy = x - cx, y - cy
-    if math.hypot(dx, dy) <= DOT_R:
-        return True
-    if dy >= 0:
-        return False
-    if math.degrees(math.atan2(abs(dx), -dy)) > ARC_HALF_ANGLE:
-        return False
-    d = math.hypot(dx, dy)
-    return any(r0 <= d <= r1 for r0, r1 in ARCS)
-
-
 def _pause(x: float, y: float) -> bool:
-    return 0.40 <= y <= 0.84 and any(a <= x <= b for a, b in PAUSE)
+    return 0.30 <= y <= 0.72 and any(a <= x <= b for a, b in PAUSE)
 
 
 def _bang(x: float, y: float) -> bool:
@@ -102,29 +73,22 @@ def _bang(x: float, y: float) -> bool:
 
 
 def classify(x: float, y: float, state: str) -> str:
-    """'' outside, 'badge', 'mark', 'bolt' or 'extra' for a unit-square point."""
+    """'' outside, 'badge' or 'bolt' for a unit-square point."""
     if not _rounded_square(x, y):
         return ""
     if state == "error":
         return "bolt" if _bang(x, y) else "badge"
     if state == "paused":
-        if _pause(x, y):
-            return "bolt"
-        near = 0.40 - BOLT_GAP <= y <= 0.84 + BOLT_GAP and any(a - BOLT_GAP <= x <= b + BOLT_GAP for a, b in PAUSE)
-        return "mark" if (_arc(x, y) and not near) else "badge"
+        return "bolt" if _pause(x, y) else "badge"
     if _in_poly(x, y, BOLT):
         return "bolt"
-    if _dist_to_poly(x, y, BOLT) < BOLT_GAP:
-        return "badge"
-    if _arc(x, y):
-        return "mark"
     return "badge"
 
 
 def render(size: int, state: str = "live") -> list[tuple[int, int, int, int]]:
     """RGBA pixels, row-major top-down, 4x4 supersampled."""
-    badge, mark, bolt = STYLES.get(state, STYLES["live"])
-    colors = {"badge": badge, "mark": mark, "bolt": bolt, "extra": CREAM}
+    badge, _mark, bolt = STYLES.get(state, STYLES["live"])
+    colors = {"badge": badge, "bolt": bolt}
     n = 4
     px = []
     for j in range(size):
@@ -149,32 +113,29 @@ def render(size: int, state: str = "live") -> list[tuple[int, int, int, int]]:
 
 def svg(state: str = "live", size: int = 256) -> str:
     """Vector master of the same geometry."""
-    badge, mark, bolt = STYLES.get(state, STYLES["live"])
+    badge, _mark, bolt = STYLES.get(state, STYLES["live"])
 
     def hexc(c):
         return "#%02X%02X%02X" % c
 
     s = size
-    cx, cy = ARC_CENTER[0] * s, ARC_CENTER[1] * s
-    a = math.radians(ARC_HALF_ANGLE)
-    arcs = []
-    for r0, r1 in ARCS:
-        r = (r0 + r1) / 2 * s
-        w = (r1 - r0) * s
-        x1, y1 = cx - r * math.sin(a), cy - r * math.cos(a)
-        x2, y2 = cx + r * math.sin(a), cy - r * math.cos(a)
-        arcs.append(f'<path d="M{x1:.1f} {y1:.1f} A{r:.1f} {r:.1f} 0 0 1 {x2:.1f} {y2:.1f}" '
-                    f'fill="none" stroke="{hexc(mark)}" stroke-width="{w:.1f}"/>')
-    arcs.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="{DOT_R * s:.1f}" fill="{hexc(mark)}"/>')
     pts = " ".join(f"{x * s:.1f},{y * s:.1f}" for x, y in BOLT)
     m, r = MARGIN * s, CORNER * s
+    if state == "paused":
+        symbol = "".join(f'<rect x="{a * s:.1f}" y="{0.30 * s:.1f}" width="{(b-a) * s:.1f}" '
+                         f'height="{0.42 * s:.1f}" rx="{0.025 * s:.1f}" fill="{hexc(bolt)}"/>'
+                         for a, b in PAUSE)
+    elif state == "error":
+        symbol = (f'<rect x="{0.44 * s:.1f}" y="{0.20 * s:.1f}" width="{0.12 * s:.1f}" '
+                  f'height="{0.40 * s:.1f}" rx="{0.02 * s:.1f}" fill="{hexc(bolt)}"/>'
+                  f'<circle cx="{0.5 * s:.1f}" cy="{0.76 * s:.1f}" r="{0.075 * s:.1f}" fill="{hexc(bolt)}"/>')
+    else:
+        symbol = f'<polygon points="{pts}" fill="{hexc(bolt)}"/>'
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {s} {s}" width="{s}" height="{s}">\n'
             f'  <title>WireSpot</title>\n'
             f'  <rect x="{m:.1f}" y="{m:.1f}" width="{s - 2 * m:.1f}" height="{s - 2 * m:.1f}" rx="{r:.1f}" '
             f'fill="{hexc(badge)}"/>\n'
-            f'  <g>{"".join(arcs)}</g>\n'
-            f'  <polygon points="{pts}" fill="{hexc(bolt)}" stroke="{hexc(badge)}" '
-            f'stroke-width="{BOLT_GAP * 2 * s:.1f}" stroke-linejoin="round" paint-order="stroke"/>\n'
+            f'  {symbol}\n'
             f'</svg>\n')
 
 

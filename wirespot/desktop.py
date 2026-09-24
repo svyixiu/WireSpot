@@ -188,6 +188,8 @@ def run(background: bool, autostarted: bool) -> int:
                     ctl.refresh_now()
                 elif kind == "report":
                     win.show_report(ev[1], ev[2])
+                elif kind == "measurement":
+                    win.show_measurement(ev[1], ev[2])
                 elif kind == "ask":
                     win.ask(ev[1], ev[2], ev[3], ev[4])
                 elif kind == "inbox":
