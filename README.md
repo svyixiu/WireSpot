@@ -113,7 +113,7 @@ has (● · └ ┌ ›), so nothing renders as a box. When a step fails, WireSp
 
 ## Icon
 
-`assets/wirespot.svg` is the vector master: a Wi-Fi mark struck by a lightning bolt, in the
+`assets/wirespot.svg` is the vector master: a single lightning bolt, in the
 Claude palette. `assets/wirespot.ico` is generated from the same geometry (`python -m
 wirespot.icon out.ico out.svg`); the tray recolours it per state (live, VPN only, idle,
 busy, paused, error).
