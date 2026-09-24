@@ -38,13 +38,13 @@ def render(name: str, title: str) -> None:
     content = "\n    ".join(chunks)
     page = f'''<!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#1F1E1D"><title>{title} — WireSpot</title><link rel="icon" type="image/svg+xml" href="/assets/wirespot.svg"><link rel="stylesheet" href="/style.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#1F1E1D"><title>{title} — WireSpot</title><link rel="icon" type="image/svg+xml" href="/assets/wirespot-6db1d396.svg"><link rel="stylesheet" href="/style.css"></head>
 <body>
-<header class="site-header wrap"><a class="brand" href="/"><img src="/assets/wirespot.svg" width="35" height="35" alt=""> <span>WireSpot</span></a><nav aria-label="Main navigation"><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a class="nav-github" href="https://github.com/svyixiu/WireSpot">GitHub <img src="/assets/icons/external.svg" alt=""></a></nav></header>
+<header class="site-header wrap"><a class="brand" href="/"><img src="/assets/wirespot-6db1d396.svg" width="35" height="35" alt=""> <span>WireSpot</span></a><nav aria-label="Main navigation"><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a class="nav-github" href="https://github.com/svyixiu/WireSpot">GitHub <img src="/assets/icons/external.svg" alt=""></a></nav></header>
 <main class="legal-main wrap"><p class="eyebrow">WIRESPOT / LEGAL</p><h1>{title}</h1>
     {content}
 </main>
-<footer class="site-footer wrap"><a class="brand" href="/"><img src="/assets/wirespot.svg" width="27" height="27" alt=""> <span>WireSpot</span></a><p>Version 0.2.1 · GPL-3.0-only</p><nav aria-label="Legal and source"><a href="/privacy">Privacy</a><a href="/terms">Terms of Use</a><a href="https://github.com/svyixiu/WireSpot">GitHub</a></nav></footer>
+<footer class="site-footer wrap"><a class="brand" href="/"><img src="/assets/wirespot-6db1d396.svg" width="27" height="27" alt=""> <span>WireSpot</span></a><p>Version 0.2.1 · GPL-3.0-only</p><nav aria-label="Legal and source"><a href="/privacy">Privacy</a><a href="/terms">Terms of Use</a><a href="https://github.com/svyixiu/WireSpot">GitHub</a></nav></footer>
 </body></html>
 '''
     (SITE / f"{name}.html").write_text(page, encoding="utf-8")
