@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1F1E1D">
+  <meta name="description" content="WireSpot routes a Windows Mobile Hotspot through your WireGuard VPN. Open source for Windows 10 and 11.">
+  <title>WireSpot — Your hotspot, through WireGuard</title>
+  <link rel="icon" type="image/svg+xml" href="/assets/wirespot.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header wrap">
+    <a class="brand" href="/" aria-label="WireSpot home"><img src="/assets/wirespot.svg" width="35" height="35" alt=""> <span>WireSpot</span></a>
+    <nav aria-label="Main navigation"><a href="#how">How it works</a><a href="#features">Features</a><a href="#faq">FAQ</a><a class="nav-github" href="https://github.com/svyixiu/WireSpot">GitHub <img src="/assets/icons/external.svg" alt=""></a></nav>
+  </header>
+  <main>
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="eyebrow-line"></span> WINDOWS 10 / 11 <span class="dot"></span> OPEN SOURCE</p>
+        <h1>Your hotspot.<br><em>Through your VPN.</em></h1>
+        <p class="hero-lead">Turn your Windows laptop into a Wi-Fi hotspot that routes connected devices through your WireGuard tunnel. Your phone, console, or tablet shares the VPN connection.</p>
+        <div class="hero-actions"><a class="button primary" href="https://github.com/svyixiu/WireSpot/releases/latest/download/WireSpotSetup.exe"><img src="/assets/icons/arrow-down.svg" alt=""> Download for Windows</a><a class="button secondary" href="https://github.com/svyixiu/WireSpot"><img src="/assets/icons/terminal.svg" alt=""> View source</a></div>
+        <p class="download-note">Version 0.2.1 · installer ~35 MB · requires WireGuard for Windows</p>
+      </div>
+      <div class="app-preview" aria-label="Illustration of the WireSpot desktop app">
+        <div class="preview-top"><div class="window-dots"><i></i><i></i></div><span>WIRESPOT</span><img src="/assets/icons/bolt.svg" alt=""></div>
+        <div class="preview-status"><img src="/assets/wirespot.svg" width="44" height="44" alt=""><div><strong>Protected hotspot</strong><small>WireGuard tunnel active</small></div><span class="status-pill">LIVE</span></div>
+        <div class="preview-section">YOUR CONNECTION</div>
+        <div class="preview-row"><img src="/assets/icons/shield-check.svg" alt=""><span>VPN tunnel <small>Connected through WireGuard</small></span><b>ON</b></div>
+        <div class="preview-row"><img src="/assets/icons/wifi.svg" alt=""><span>Mobile Hotspot <small>Sharing the tunnel</small></span><b>ON</b></div>
+        <div class="preview-section">MANAGE</div>
+        <div class="preview-row"><img src="/assets/icons/phone.svg" alt=""><span>Devices <small>Approve who gets online</small></span><img class="chevron" src="/assets/icons/chev-right.svg" alt=""></div>
+        <div class="preview-row"><img src="/assets/icons/file.svg" alt=""><span>Profiles <small>Choose your VPN connection</small></span><img class="chevron" src="/assets/icons/chev-right.svg" alt=""></div>
+        <div class="preview-foot">DESKTOP APP <span>+</span> CLI STAY IN SYNC</div>
+      </div>
+    </section>
+    <section id="how" class="section section-shade"><div class="wrap">
+      <div class="section-head"><p class="eyebrow">01 / THE ROUTE</p><h2>One path out.</h2><p>WireSpot starts Windows Mobile Hotspot from the WireGuard connection profile. Windows then shares that tunnel with your devices.</p></div>
+      <div class="route" aria-label="Laptop to WireGuard tunnel to Mobile Hotspot to connected devices">
+        <div class="route-node"><img src="/assets/icons/laptop.svg" alt=""><strong>Windows laptop</strong><span>Wi-Fi, Ethernet, or USB uplink</span></div><span class="route-line" aria-hidden="true"></span><div class="route-node emphasis"><img src="/assets/icons/shield.svg" alt=""><strong>WireGuard tunnel</strong><span>Your VPN connection</span></div><span class="route-line" aria-hidden="true"></span><div class="route-node"><img src="/assets/icons/wifi.svg" alt=""><strong>Mobile Hotspot</strong><span>Windows shares the tunnel</span></div><span class="route-line" aria-hidden="true"></span><div class="route-node"><img src="/assets/icons/phone.svg" alt=""><strong>Your devices</strong><span>Phone, tablet, console</span></div>
+      </div>
+      <p class="route-note"><img src="/assets/icons/info.svg" alt=""> WireSpot verifies the hotspot source and watches for a path around the VPN. If protection fails, its guard stops the hotspot.</p>
+    </div></section>
+    <section id="features" class="section wrap"><div class="section-head"><p class="eyebrow">02 / BUILT FOR CONTROL</p><h2>Everything in one place.</h2><p>Use the desktop app, custom tray menu, or CLI. They share live state and an activity journal.</p></div>
+      <div class="feature-grid">
+        <article class="feature-card"><img src="/assets/icons/shield-check.svg" alt=""><h3>Go live with confidence</h3><p>Preflight checks, tunnel verification, and a rollback path if setup fails. Choose balanced hotspot protection or strict VPN-only protection.</p></article>
+        <article class="feature-card"><img src="/assets/icons/phone.svg" alt=""><h3>Approve devices</h3><p>New devices wait for your decision before they get internet access. Allow, block, and remember devices from the app or CLI.</p></article>
+        <article class="feature-card"><img src="/assets/icons/lock.svg" alt=""><h3>Keep DNS on the tunnel</h3><p>DNS lock and a fail-closed guard help keep hotspot traffic on the intended route as connections change.</p></article>
+        <article class="feature-card"><img src="/assets/icons/file.svg" alt=""><h3>Review profiles safely</h3><p>Import WireGuard .conf files through a review card. Script hooks are rejected, and private keys are never shown in the UI.</p></article>
+        <article class="feature-card"><img src="/assets/icons/terminal.svg" alt=""><h3>Desktop and CLI in sync</h3><p>Use the window or a command shell with autocomplete. Actions, pause timers, guard state, and device approvals stay aligned.</p></article>
+        <article class="feature-card"><img src="/assets/icons/pause.svg" alt=""><h3>Fits your routine</h3><p>Pause and auto-resume, start with Windows without a logon UAC prompt, and uninstall with a choice to keep or delete your data.</p></article>
+      </div>
+    </section>
+    <section class="section section-shade"><div class="wrap split"><div><p class="eyebrow">03 / DEVICE APPROVAL</p><h2>You decide who joins.</h2><p>When approval is on, a new device appears as a request. WireSpot blocks its network access until you allow it by pinning its hotspot IP to a sink MAC address on the laptop.</p><p class="muted">The block is applied after the device's first packet, so there can be about a one-second window. A device that rejoins with a randomized MAC address asks again. Approval is enforced only while WireSpot runs.</p></div><div class="approval-card"><div class="approval-heading"><img src="/assets/icons/phone.svg" alt=""><span>WAITING FOR APPROVAL</span></div><strong>New device joined</strong><small>192.168.137.4 · New address</small><div class="approval-actions"><span>Block</span><span>Allow device</span></div></div></div></section>
+    <section class="section wrap"><div class="split safety"><div><p class="eyebrow">04 / WHAT IT CHANGES</p><h2>Know what runs.</h2><p>WireSpot runs as administrator. It creates a WireGuard tunnel service and starts Windows Mobile Hotspot. Its runtime VPN copy has administrator-only access. When you disconnect or uninstall, it removes what it created.</p><p>Settings and profiles stay on your PC. The hotspot password is stored in plain text in your local settings file, so use a unique one.</p></div><div class="requirements"><h3>Before you install</h3><div><img src="/assets/icons/check.svg" alt=""> Windows 10 or 11</div><div><img src="/assets/icons/check.svg" alt=""> WireGuard for Windows</div><div><img src="/assets/icons/check.svg" alt=""> A Wi-Fi adapter that supports Mobile Hotspot</div><div><img src="/assets/icons/check.svg" alt=""> Administrator access</div></div></div></section>
+    <section class="section section-shade"><div class="wrap"><div class="section-head"><p class="eyebrow">05 / GET STARTED</p><h2>From install to online.</h2></div><div class="steps"><div><b>01</b><h3>Install WireGuard</h3><p>Install <a href="https://www.wireguard.com/install/">WireGuard for Windows</a> and get a WireGuard .conf from your VPN provider.</p></div><div><b>02</b><h3>Install WireSpot</h3><p>Run the installer, review its changes, and choose your shortcuts and startup options.</p></div><div><b>03</b><h3>Import and go live</h3><p>Import your .conf, set a hotspot name and password, then press Go live.</p></div></div></div></section>
+    <section id="faq" class="section wrap"><div class="section-head"><p class="eyebrow">06 / QUESTIONS</p><h2>Good to know.</h2></div><div class="faq"><details><summary>Do I need Proton VPN?</summary><p>WireSpot works with WireGuard profiles, including Proton VPN .conf files. You provide the VPN connection.</p></details><details><summary>Can I use Ethernet or USB for my laptop's internet?</summary><p>Yes. WireSpot detects the uplink from Windows routing. Your Wi-Fi radio still hosts Mobile Hotspot.</p></details><details><summary>Does it send my VPN keys anywhere?</summary><p>No. Configuration files stay on your PC. The app's optional exit-IP check contacts ipify through the VPN tunnel.</p></details><details><summary>What happens if the VPN drops?</summary><p>WireSpot checks the tunnel and hotspot route and stops the hotspot if its guard detects a protection failure while WireSpot is running.</p></details></div></section>
+    <section class="closing section-shade"><div class="wrap closing-inner"><div><p class="eyebrow">OPEN SOURCE / GPL-3.0-ONLY</p><h2>See how it works.</h2><p>The source, tests, and build instructions are on GitHub. WireSpot is unofficial and not affiliated with Proton AG, WireGuard LLC, Jason A. Donenfeld, or Microsoft.</p></div><div class="closing-actions"><a class="button primary" href="https://github.com/svyixiu/WireSpot/releases/latest/download/WireSpotSetup.exe"><img src="/assets/icons/arrow-down.svg" alt=""> Download for Windows</a><a class="text-link" href="https://github.com/svyixiu/WireSpot">Explore the source <img src="/assets/icons/external.svg" alt=""></a></div></div></section>
+  </main>
+  <footer class="site-footer wrap"><a class="brand" href="/"><img src="/assets/wirespot.svg" width="27" height="27" alt=""> <span>WireSpot</span></a><p>Version 0.2.1 · GPL-3.0-only</p><nav aria-label="Legal and source"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="https://github.com/svyixiu/WireSpot">GitHub</a></nav></footer>
+</body>
+</html>
