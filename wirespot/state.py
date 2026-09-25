@@ -53,6 +53,9 @@ class RelayRecord:
     tunnel_guid: str = ""
     runtime_conf: str = ""
     protection: str = ""
+    provider: str = ""              # empty = WireSpot WireGuard, nordvpn = external ownership
+    provider_protocol: str = ""
+    forward_guard: bool = False
     hotspot_started_by_us: bool = False
     hotspot_guid: str = ""
     hotspot_source: str = ""

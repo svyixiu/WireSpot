@@ -250,6 +250,8 @@ class MainWindow:
             inner = tk.Frame(frame, bg=BG)
             inner.pack(fill="both", expand=True, padx=16, pady=(6, 16))
         title, sub = PAGE_TITLES[key]
+        if key == "profiles" and self.ctl.snap.get("settings", {}).get("behavior", {}).get("profile_less"):
+            title, sub = "Supported VPNs", "Connect in the NordVPN desktop app. WireSpot validates the connection before hosting."
         tk.Label(inner, text=title, font=self.f.h1, fg=CREAM, bg=BG, anchor="w").pack(fill="x")
         if sub:
             tk.Label(inner, text=sub, font=self.f.small, fg=STONE, bg=BG, anchor="w", justify="left",
@@ -274,7 +276,9 @@ class MainWindow:
         if key == "settings":
             return s.get("autostart"), tuple(sorted((s.get("settings") or {}).get("behavior", {}).items()))
         if key == "profiles":
-            return (tuple(s.get("profiles") or []),
+            return (bool((s.get("settings") or {}).get("behavior", {}).get("profile_less")),
+                    s.get("provider_status"), s.get("provider_reason"), s.get("provider_adapter"),
+                    tuple(s.get("profiles") or []),
                     (s.get("settings") or {}).get("vpn", {}).get("default_profile"),
                     tuple((name, check["title"]) for name, check in sorted(self.ctl.profile_checks.items())))
         return None
@@ -460,6 +464,19 @@ class MainWindow:
     def _page_profiles(self, p) -> None:
         snap = self.ctl.snap
         v = self.page_view
+        if snap.get("settings", {}).get("behavior", {}).get("profile_less"):
+            self.page_actions = {"scan": self._scan_nordvpn}
+            self._section(p, "NordVPN")
+            card = self._card(p)
+            self._kv(card, "support", "Supported")
+            self._kv(card, "connection", snap.get("provider_status", "Checking…").replace("_", " ").title())
+            self._kv(card, "protocol", snap.get("provider_protocol") or "Unknown")
+            self._kv(card, "adapter", snap.get("provider_adapter") or "Not detected")
+            tk.Label(card, text=snap.get("provider_reason") or "Connect through the NordVPN desktop application.",
+                     font=self.f.small, fg=STONE, bg=SURFACE, anchor="w", justify="left",
+                     wraplength=WIDTH - 70).pack(fill="x", pady=(8, 8))
+            v.row(p, "scan", "refresh", "Scan Again", "Recheck NordVPN connection").frame.pack_configure(padx=0)
+            return
         self.page_actions = {"import": self._import_dialog, "folder": self.ctl.open_vpn_folder,
                              "guide": lambda: webbrowser.open(PROTON_GUIDE)}
         v.row(p, "import", "import", "Import a .conf file…", primary=True).frame.pack_configure(padx=0)
@@ -522,6 +539,10 @@ class MainWindow:
             tk.Label(r, text=path.name, font=self.f.bold, fg=CRAIL, bg=SURFACE, anchor="w").pack(side="left")
             tk.Label(body, text=why, font=self.f.small, fg=STONE, bg=SURFACE, anchor="w", justify="left",
                      wraplength=WIDTH - 70).pack(fill="x")
+
+    def _scan_nordvpn(self) -> None:
+        self.ctl.provider_scan_at = 0
+        self.ctl.refresh_now()
 
     def _import_dialog(self) -> None:
         from .inbox import downloads_dir
@@ -777,6 +798,7 @@ class MainWindow:
 
         self.page_actions = {
             "autostart": self.ctl.toggle_autostart, "autoconnect": toggle("autoconnect", False),
+            "profile_less": toggle("profile_less", False),
             "guard": toggle("guard", True), "dns_lock": toggle("dns_lock", True),
             "approve": self.ctl.toggle_approval, "watch": toggle("watch_downloads", True),
             "debug": toggle("debug", False), "data": self.ctl.open_data, "vpn": self.ctl.open_vpn_folder,
@@ -791,16 +813,26 @@ class MainWindow:
         self._section(p, "Startup")
         switch("autostart", "power", "Start with Windows", "In the tray at logon, elevated, no UAC prompt.",
                snap.get("autostart"))
-        switch("autoconnect", "play", "Go live at startup", "Connect the default profile and start the hotspot.",
+        switch("autoconnect", "play", "Go live at startup",
+               "Host when NordVPN is already connected." if b.get("profile_less") else "Connect the default profile and start the hotspot.",
                b.get("autoconnect"))
+        self._section(p, "Advanced Settings")
+        switch("profile_less", "server", "Profile-less Mode",
+               "Use a VPN managed by another desktop app instead of a WireGuard profile. NordVPN supported.",
+               b.get("profile_less", False))
         self._section(p, "Safety")
         switch("approve", "shield-check", "Approve new devices", "New devices get no network until you allow them.",
                b.get("approve_devices", True))
-        switch("guard", "shield", "Fail-closed guard", "Stop the hotspot if the tunnel drops.", b.get("guard", True))
-        switch("dns_lock", "lock", "DNS lock", "Every lookup goes through the tunnel resolver.", b.get("dns_lock", True))
+        if b.get("profile_less"):
+            self._kv(p, "Forwarding guard", "Always on in Profile-less Mode")
+        else:
+            switch("guard", "shield", "Fail-closed guard", "Stop the hotspot if the tunnel drops.", b.get("guard", True))
+        if not b.get("profile_less"):
+            switch("dns_lock", "lock", "DNS lock", "Every lookup goes through the tunnel resolver.", b.get("dns_lock", True))
         self._section(p, "Convenience")
-        switch("watch", "import", "Watch Downloads", "Offer new Proton .conf files for import.",
-               b.get("watch_downloads", True))
+        if not b.get("profile_less"):
+            switch("watch", "import", "Watch Downloads", "Offer new Proton .conf files for import.",
+                   b.get("watch_downloads", True))
         switch("debug", "file", "Debug logging", "Write logs\\wirespot-DATE.log (secrets redacted).", b.get("debug"))
         self._section(p, "Your files")
         v.row(p, "data", "folder", "Open the data folder", "%APPDATA%" if paths.is_installed() else "").frame.pack_configure(padx=0)

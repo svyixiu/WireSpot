@@ -23,7 +23,7 @@ class EnvReport:
 
 
 class Backend:
-    def env(self, wireguard_path: str = "") -> EnvReport:
+    def env(self, wireguard_path: str = "", require_wireguard: bool = True) -> EnvReport:
         is_win = sys.platform == "win32"
         build = sys.getwindowsversion().build if is_win else 0
         wgx = wireguard.find_wireguard(wireguard_path) if is_win else None
@@ -34,7 +34,7 @@ class Backend:
             rep.problems.append(f"Windows build {build} is too old (need Windows 10 1809+).")
         if not rep.admin:
             rep.problems.append("Administrator rights are required.")
-        if not wgx:
+        if require_wireguard and not wgx:
             rep.problems.append("WireGuard for Windows is not installed (https://www.wireguard.com/install/).")
         return rep
 

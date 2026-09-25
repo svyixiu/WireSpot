@@ -289,9 +289,9 @@ class Installer(SetupWindow):
         upd = bool(self.previous) and self.previous != VERSION
         self.header.pill("info", "update" if upd else "setup", SHIMMER)
         self.hero(p, f"Set up {APP_NAME}", f"v{VERSION} · Your hotspot, through your VPN")
-        self.section(p, "Three steps to go live")
-        self.journey(p, "01", "Install WireGuard for Windows", "The VPN tunnel runs through WireGuard's Windows service.")
-        self.journey(p, "02", "Get a WireGuard .conf", "Create one on your VPN provider's website, then import it in WireSpot.")
+        self.section(p, "Choose your VPN path")
+        self.journey(p, "01", "WireGuard profile", "Install WireGuard, then import a .conf into WireSpot.")
+        self.journey(p, "02", "NordVPN desktop app", "Connect in NordVPN, then enable Profile-less Mode in WireSpot Settings.")
         self.journey(p, "03", "Choose your hotspot", "Name it, set a strong password, and press Go live.")
         self.view.button(p, "Proton's .conf guide", "external",
                          lambda: webbrowser.open("https://protonvpn.com/support/wireguard-configurations"))\
@@ -303,7 +303,7 @@ class Installer(SetupWindow):
         if self.wireguard:
             self.point(p, "check", "WireGuard for Windows is installed.")
         else:
-            self.point(p, "alert", "Install WireGuard for Windows before going live: wireguard.com/install",
+            self.point(p, "info", "WireGuard is needed for .conf profiles; NordVPN Profile-less Mode does not need it.",
                        SHIMMER, SHIMMER)
         if self.previous:
             self.point(p, "info", f"WireSpot {self.previous} is installed - this {'updates' if upd else 'reinstalls'} "

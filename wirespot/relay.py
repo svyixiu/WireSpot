@@ -28,6 +28,8 @@ from .netid import locate_hotspot, norm_guid
 from .state import Machine, RelayRecord, State, Transaction
 from .ui import Choice
 from .wlan import WlanInterface
+from .nordvpn import NordVPNProvider
+from . import forward_guard, network_events
 
 PHASES = 7
 
@@ -64,6 +66,7 @@ class Ctx:
     hotspot_guid: str = ""
     hotspot_name: str = ""
     vpn_verified: bool = False
+    external: bool = False
     notes: list[str] = field(default_factory=list)
 
 
@@ -130,14 +133,23 @@ class Relay:
             try:
                 if self.m.state not in (State.DISCONNECTED, State.ERROR, State.VPN_CONNECTED, State.READY):
                     self.m.force(State.ERROR)
+                want_external = bool(s["behavior"].get("profile_less"))
+                if self.record.tunnel_name and bool(self.record.provider) != want_external:
+                    ui.err("Stop the current WireSpot session before switching VPN modes.")
+                    return False
                 if not self._preflight(ctx, token, opts):
                     return False
-                if self.record.hotspot_started_by_us or self.record.ics_guids or self.record.dns_lock:
+                if self.record.hotspot_started_by_us or self.record.ics_guids or self.record.dns_lock or self.record.forward_guard:
                     ui.info("Tearing down the current hotspot session first…")
-                    self._stop_sharing()
+                    if not self._stop_sharing():
+                        self._safe_to(State.ERROR, "Could not safely stop the previous hotspot session")
+                        return False
                     if self.m.state == State.READY:
                         self._safe_to(State.VPN_CONNECTED)
-                if not (opts.reuse_vpn and self._attach_vpn(ctx)):
+                if ctx.external:
+                    if not self._connect_external(ctx):
+                        return False
+                elif not (opts.reuse_vpn and self._attach_vpn(ctx)):
                     if not self._connect_vpn(ctx, tx):
                         return False
                 if opts.vpn_only or not s["behavior"].get("auto_start_hotspot", True):
@@ -171,17 +183,26 @@ class Relay:
             errors = tx.rollback({"share"} if keep_vpn else None)
             for e in errors:
                 ui.warn(f"Rollback step failed: {e}")
+        if self.record.forward_guard:
+            try:
+                self._release_forward_guard()
+            except Exception as e:
+                ui.err(f"Forwarding guard remains active: {e}")
         self.record.hotspot_started_by_us = False
         self.record.ics_changed = False
         self.record.ics_guids = []
         self.record.dns_lock = False
         self.record.ready_since = 0.0
-        if keep_vpn:
+        if self.record.forward_guard:
+            self._safe_to(State.ERROR, message or "Forwarding guard retained while hotspot status is uncertain")
+        elif keep_vpn:
             self._safe_to(State.VPN_CONNECTED, message)
-            ui.info(f"VPN remains connected ({ctx.tunnel_name}). Use 'stop' to disconnect it.")
+            ui.info(("NordVPN remains managed by its desktop app." if ctx.external else
+                     f"VPN remains connected ({ctx.tunnel_name}). Use 'stop' to disconnect it."))
             ui.hint("Run 'doctor hotspot' for diagnostics.")
         else:
             self.record.tunnel_name = self.record.tunnel_guid = self.record.runtime_conf = ""
+            self.record.provider = self.record.provider_protocol = ""
             self._safe_to(State.DISCONNECTED, message)
         self.m.persist()
 
@@ -197,19 +218,46 @@ class Relay:
     # ------------------------------------------------------------ preflight
     def _preflight(self, ctx: Ctx, token: str | None, opts: StartOptions) -> bool:
         s = ctx.settings
+        ctx.external = bool(s["behavior"].get("profile_less"))
         ui.step(1, PHASES, "Preflight")
         log.event("info", "stage 1: validate environment")
-        env = self.b.env(s["vpn"].get("wireguard_path", ""))
+        env = (self.b.env(s["vpn"].get("wireguard_path", ""), require_wireguard=False)
+               if ctx.external else self.b.env(s["vpn"].get("wireguard_path", "")))
         if env.problems:
             for p in env.problems:
                 ui.err(p)
             return False
         ctx.wireguard, ctx.wg = env.wireguard, env.wg
-        ui.ok(f"Windows build {env.build} · administrator · WireGuard found")
+        ui.ok(f"Windows build {env.build} · administrator" + ("" if ctx.external else " · WireGuard found"))
+
+        if ctx.external:
+            detected = NordVPNProvider(self.b).detect()
+            if not detected.adapter or not detected.route_valid:
+                ui.err(detected.reason)
+                if self.record.provider == "nordvpn":
+                    if self.record.hotspot_started_by_us:
+                        self.b.hotspot_stop(self.record.tunnel_guid)
+                        self.record.hotspot_started_by_us = False
+                    self._safe_to(State.ERROR, detected.reason)
+                return False
 
         log.event("info", "stage 2: validate config")
         if not opts.vpn_only and not self._ensure_hotspot_config(s):
             return False
+
+        if ctx.external:
+            if token:
+                ui.err("Profile-less Mode uses NordVPN; no WireGuard profile can be selected.")
+                return False
+            if opts.protection:
+                ui.err("WireGuard protection modes do not apply to NordVPN.")
+                return False
+            ctx.protection = "NordVPN"
+            if opts.vpn_only:
+                return True
+            if not self._check_uplink(ctx):
+                return False
+            return self._check_tethering(ctx, opts)
 
         log.event("info", "stage 3: validate profile")
         profs, bad = profiles.list_profiles(paths.VPN_DIR)
@@ -394,6 +442,27 @@ class Relay:
         return True
 
     # ------------------------------------------------------------ VPN
+    def _connect_external(self, ctx: Ctx) -> bool:
+        svcs, _ = self.b.wg_services()
+        if any(x.ours and x.running for x in svcs):
+            ui.err("A WireSpot WireGuard tunnel is still running. Stop it before hosting NordVPN.")
+            return False
+        self._safe_to(State.VPN_CONNECTING)
+        status = NordVPNProvider(self.b).detect(validate=True)
+        if not status.ready or not status.adapter:
+            self._safe_to(State.DISCONNECTED, status.reason)
+            ui.err(status.reason)
+            return False
+        a = status.adapter
+        ctx.tunnel_name, ctx.tunnel_guid, ctx.tunnel_ifindex = "NordVPN", a.guid, a.ifindex
+        ctx.vpn_verified = True
+        self.record.tunnel_name, self.record.tunnel_guid = "NordVPN", a.guid
+        self.record.profile, self.record.protection = "", "NordVPN"
+        self.record.provider, self.record.provider_protocol = "nordvpn", status.protocol
+        self._safe_to(State.VPN_CONNECTED)
+        ui.ok(f"NordVPN {status.protocol} · route, internet, DNS and sharing validated")
+        return True
+
     def _connect_vpn(self, ctx: Ctx, tx: Transaction) -> bool:
         p = ctx.profile
         ui.step(2, PHASES, "WireGuard")
@@ -508,6 +577,17 @@ class Relay:
     # ------------------------------------------------------------ hotspot + sharing
     def _share(self, ctx: Ctx, tx: Transaction) -> bool:
         s = ctx.settings
+        if ctx.external:
+            status = NordVPNProvider(self.b).detect(validate=True)
+            if not status.ready or not status.adapter or status.adapter.guid != ctx.tunnel_guid:
+                raise Abort("NordVPN changed before hosting: " + status.reason, keep_vpn=True)
+            try:
+                forward_guard.install(ctx.tunnel_guid)
+            except forward_guard.ForwardGuardError as e:
+                raise Abort("Cannot safely share NordVPN: " + str(e), keep_vpn=True) from e
+            self.record.forward_guard = True
+            self.m.persist()
+            tx.add("share", "remove forwarding guard", self._release_forward_guard)
         ui.step(4, PHASES, "Mobile Hotspot")
         # The hotspot is ALWAYS started from the WireGuard connection profile:
         # Windows' tethering service then NATs hotspot clients into the tunnel.
@@ -692,7 +772,7 @@ class Relay:
                     break
                 t.update("Waiting for Windows to classify the tunnel as an internet connection")
                 self.sleep(1.0)
-        if cap == "Enabled":
+        if cap == "Enabled" and (data or {}).get("source", {}).get("kind") == "vpn":
             ui.ok("Windows can share the VPN connection directly")
             return True
         ui.warn(f"Windows does not offer the VPN as a hotspot source (capability '{cap or 'n/a'}', connectivity '{level or 'none'}').")
@@ -712,8 +792,10 @@ class Relay:
             ui.warn(f"Hotspot adapter address is {', '.join(ha.get('ipv4') or []) or 'none'}, expected {scope}.")
 
         log.event("info", "stage 14: verify DNS")
-        dns = ctx.profile.dns
-        if not dns:
+        dns = [] if ctx.external else ctx.profile.dns
+        if ctx.external:
+            ui.ok("NordVPN controls DNS; WireSpot leaves its resolver unchanged")
+        elif not dns:
             ui.warn("The profile has no DNS server; clients will use whatever the host resolver uses.")
         elif ctx.protection == "strict" and ctx.profile.full_tunnel:
             ui.ok(f"DNS {', '.join(dns)} (non-tunnel DNS blocked by WireGuard's firewall)")
@@ -734,13 +816,17 @@ class Relay:
 
         log.event("info", "stage 15: verify client path")
         rc = self.b.route_check()
-        if any(r.get("ifindex") != ctx.tunnel_ifindex for r in rc.get("routes", [])):
+        if not rc.get("ok") or len(rc.get("routes") or []) < 2 or any(
+                r.get("ifindex") != ctx.tunnel_ifindex for r in rc.get("routes", [])):
             raise Abort("Routing changed: internet traffic no longer resolves to the tunnel.", keep_vpn=True)
+        if ctx.external and not forward_guard.installed():
+            raise Abort("NordVPN forwarding guard is missing.", keep_vpn=True)
         with ui.task("Checking exit IP"):
             ctx.notes.append(self.b.public_ip())
-        ui.ok("Path: hotspot → Windows NAT → WireGuard → Proton")
+        ui.ok("Path: hotspot → Windows NAT → " + ("NordVPN" if ctx.external else "WireGuard → Proton"))
         log.event("info", "stage 16: ready")
         self.record.ready_since = time.time()
+        self.record.last_error = ""
         self.m.to(State.READY)
         return True
 
@@ -753,7 +839,7 @@ class Relay:
         ui.kv("SSID", ui.color(s["hotspot"]["ssid"], ui.C.bold), 12)
         ui.kv("Password", ui.mask(s["hotspot"]["password"]) + "  ('show password' reveals it)", 12)
         ui.kv("Band", f"{hs_mod.BAND_LABEL.get(self.record.band or ctx.band, ctx.band)} · {ctx.security.upper()}", 12)
-        ui.kv("VPN", ctx.profile.label, 12)
+        ui.kv("VPN", "NordVPN · " + self.record.provider_protocol if ctx.external else ctx.profile.label, 12)
         ui.kv("Exit IP", ip or "unavailable", 12)
         ui.kv("Mode", ctx.protection + (" · DNS locked" if self.record.dns_lock else ""), 12)
         ui.rule()
@@ -761,7 +847,8 @@ class Relay:
 
     def _vpn_only_summary(self, ctx: Ctx) -> None:
         ui.blank()
-        ui.ok(f"VPN connected: {ctx.profile.label} ({ctx.protection})")
+        ui.ok(("NordVPN validated (managed in NordVPN app)" if ctx.external else
+               f"VPN connected: {ctx.profile.label} ({ctx.protection})"))
         ui.hint("Hotspot not started. Run 'hotspot start' to share this VPN over Wi-Fi.")
 
     # ================================================================ hotspot-only paths
@@ -809,7 +896,7 @@ class Relay:
                     ui.ok(f"Device-approval holds released ({released})")
             except Exception as e:
                 log.event("error", f"approval release: {e}")
-        d = self.b.dns_lock("remove")
+        d = {"ok": True} if self.record.provider else self.b.dns_lock("remove")
         if d.get("removed"):
             ui.ok("DNS lock removed")
         elif not d.get("ok"):
@@ -817,7 +904,10 @@ class Relay:
             ok_all = False
         self.record.dns_lock = False
 
-        data, _ = self.b.hotspot_status(self.record.tunnel_guid)
+        data, status_error = self.b.hotspot_status(self.record.tunnel_guid)
+        if self.record.forward_guard and (status_error or not data):
+            ui.err("Cannot verify whether Mobile Hotspot is off; forwarding guard remains active.")
+            ok_all = False
         if data and data.get("state") not in ("Off", None):
             with ui.task("Stopping Mobile Hotspot"):
                 r = self.b.hotspot_stop(self.record.tunnel_guid)
@@ -838,11 +928,28 @@ class Relay:
                 ui.warn(f"Could not clear classic ICS sharing: {err_}")
                 ok_all = False
             self.record.ics_guids, self.record.ics_journal, self.record.ics_changed = [], [], False
+        if self.record.forward_guard:
+            try:
+                self._release_forward_guard()
+            except Exception as e:
+                ui.err(f"Forwarding guard remains active: {e}")
+                ok_all = False
         self.record.hotspot_started_by_us = False
         self.record.hotspot_guid = ""
         self.record.ready_since = 0.0
         self.m.persist()
         return ok_all
+
+    def _release_forward_guard(self) -> bool:
+        if not self.record.forward_guard:
+            return True
+        data, error = self.b.hotspot_status(self.record.tunnel_guid)
+        if error or not data or data.get("state") != "Off":
+            raise forward_guard.ForwardGuardError("Mobile Hotspot has not been verified off")
+        forward_guard.remove()
+        self.record.forward_guard = False
+        self.m.persist()
+        return True
 
     @exclusive
     def stop(self, s: dict) -> bool:
@@ -858,6 +965,14 @@ class Relay:
 
     @exclusive
     def disconnect_vpn(self, s: dict, quiet_if_none: bool = False) -> bool:
+        if self.record.provider == "nordvpn":
+            if self.record.forward_guard:
+                ui.err("NordVPN sharing guard is still active; stop the hotspot first.")
+                return False
+            self.record.tunnel_name = self.record.tunnel_guid = ""
+            self.record.provider = self.record.provider_protocol = ""
+            self.m.persist()
+            return True
         from .wireguard import find_wireguard
 
         wgx = find_wireguard(s["vpn"].get("wireguard_path", ""))
@@ -890,7 +1005,7 @@ class Relay:
     def start_guard(self, s: dict | None = None) -> None:
         """Start the fail-closed guard (if enabled) and device approval (if enabled)."""
         s = s or settings_mod.load()[0]
-        if self.guard is None and self.record.tunnel_name and s["behavior"].get("guard", True):
+        if self.guard is None and self.record.tunnel_name and (self.record.provider or s["behavior"].get("guard", True)):
             self.guard = Guard(self)
             self.guard.start()
         self.start_gate(s)
@@ -903,11 +1018,35 @@ class Relay:
 
     def stop_guard(self) -> None:
         if self.guard is not None:
-            self.guard.stop()
+            guard = self.guard
+            guard.stop()
             self.guard = None
+            if guard is not threading.current_thread():
+                guard.join(timeout=5)
         if self.gate is not None:
             self.gate.stop()
             self.gate = None
+
+    def reconcile_external(self, s: dict) -> bool:
+        """On restart, re-arm protection without trusting a saved adapter index."""
+        if self.record.provider != "nordvpn":
+            return False
+        if self.record.forward_guard:
+            try:
+                protected = forward_guard.installed()
+            except Exception as e:
+                protected = False
+                log.event("error", f"[ProfileLess] Could not inspect forwarding guard: {e}")
+            if not protected:
+                self.b.hotspot_stop(self.record.tunnel_guid)
+                self._safe_to(State.ERROR, "NordVPN forwarding guard was missing; hotspot stopped")
+                return True
+            if self.m.state in (State.READY, State.ERROR):
+                self.start_guard(s)
+        elif self.m.state == State.READY:
+            self.b.hotspot_stop(self.record.tunnel_guid)
+            self._safe_to(State.ERROR, "NordVPN forwarding guard was missing; hotspot stopped")
+        return True
 
 
 class Guard(threading.Thread):
@@ -919,42 +1058,67 @@ class Guard(threading.Thread):
     def __init__(self, relay: Relay, notify: Callable[[], None] | None = None):
         super().__init__(daemon=True, name="wirespot-guard")
         self.relay = relay
-        self._stop = threading.Event()
+        self._stopping = threading.Event()
+        self._wake = threading.Event()
         self.known: dict[str, clients_mod.Client] = {}
         self.enabled = True
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stopping.set()
+        self._wake.set()
 
     def run(self) -> None:
         mutex = oplock.NamedMutex(oplock.GUARD)
-        owned = False
         try:
-            while not self._stop.wait(self.INTERVAL):
-                if not owned:
-                    owned = mutex.acquire(0)       # another process may already be guarding
-                    if not owned:
-                        continue
-                if oplock.operation_busy() or not self.relay.lock.acquire(blocking=False):
-                    continue  # a start/stop is running somewhere
-                try:
-                    self.relay.reload()
-                    if self.relay.m.state == State.READY:
-                        self.tick()
-                except Exception as e:
-                    log.event("error", f"guard: {e}")
-                finally:
-                    self.relay.lock.release()
+            with network_events.NetworkEvents(self._wake) if self.relay.record.provider else _NoEvents():
+                if self.relay.record.provider:
+                    self._wake.set()
+                self._loop(mutex)
         finally:
             mutex.close()
+
+    def _loop(self, mutex) -> None:
+        owned = False
+        while not self._stopping.is_set():
+            self._wake.wait(self.INTERVAL)
+            self._wake.clear()
+            if self._stopping.is_set():
+                break
+            if not owned:
+                owned = mutex.acquire(0)       # another process may already be guarding
+                if not owned:
+                    continue
+            if oplock.operation_busy() or not self.relay.lock.acquire(blocking=False):
+                continue  # a start/stop is running somewhere
+            try:
+                self.relay.reload()
+                if self.relay.m.state == State.READY:
+                    self.tick()
+                elif self.relay.record.provider == "nordvpn" and self.relay.m.state == State.ERROR:
+                    self.recover()
+            except Exception as e:
+                log.event("error", f"guard: {e}")
+            finally:
+                self.relay.lock.release()
 
     def tick(self) -> None:
         r = self.relay
         rec = r.record
+        if rec.provider == "nordvpn":
+            try:
+                if not forward_guard.installed():
+                    return self.fail_closed("the NordVPN forwarding guard is missing")
+                status = NordVPNProvider(r.b).detect(validate=False)
+                if not status.adapter or status.adapter.guid != rec.tunnel_guid or not status.route_valid:
+                    return self.fail_closed("NordVPN interface or route was lost")
+            except Exception as e:
+                return self.fail_closed(f"NordVPN validation failed: {e}")
         data = r.b.guard_tick(rec.tunnel_name, rec.hotspot_guid)
         if not data.get("ok"):
+            if rec.provider:
+                return self.fail_closed("Windows hotspot status could not be verified")
             return
-        if data.get("tunnel_state") != "Running":
+        if not rec.provider and data.get("tunnel_state") != "Running":
             return self.fail_closed(f"the VPN tunnel service is {data.get('tunnel_state')}")
         hs_state = data.get("hotspot_state")
         if hs_state == "On" and data.get("flags") is not None:
@@ -986,14 +1150,38 @@ class Guard(threading.Thread):
         r = self.relay
         ui.blank()
         ui.err(f"Guard: {reason}.")
-        ui.warn("Stopping the hotspot so no device can reach the internet outside the VPN.")
-        r.b.hotspot_stop(r.record.tunnel_guid)
+        ui.warn("VPN connection lost. Connected-device internet is suspended to prevent fallback." if r.record.provider
+                else "Stopping the hotspot so no device can reach the internet outside the VPN.")
+        result = r.b.hotspot_stop(r.record.tunnel_guid)
+        if not result.ok:
+            log.event("error", "[ProfileLess] Hotspot stop failed; forwarding guard must remain active")
         r.record.hotspot_started_by_us = False
         r._safe_to(State.ERROR, reason)
-        ui.hint("Run 'status' to inspect, then 'start' to rebuild.")
-        r._notify("fail", f"{reason}. The hotspot was stopped to keep traffic inside the VPN.")
+        ui.hint("Waiting for NordVPN…" if r.record.provider else "Run 'status' to inspect, then 'start' to rebuild.")
+        r._notify("fail", f"{reason}. Connected-device internet is suspended to prevent fallback.")
         _redraw()
+        if not r.record.provider:
+            self.stop()
+
+    def recover(self) -> None:
+        r = self.relay
+        if not r.record.forward_guard:
+            return
+        status = NordVPNProvider(r.b).detect(validate=True)
+        if not status.ready or not status.adapter:
+            return
+        log.event("info", "[ProfileLess] NordVPN restored; starting revalidation and hosting")
         self.stop()
+        threading.Thread(target=lambda: r.start(settings_mod.load()[0], None),
+                         daemon=True, name="wirespot-nordvpn-recover").start()
+
+
+class _NoEvents:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return None
 
 
 _redraw_hook: Callable[[], None] | None = None

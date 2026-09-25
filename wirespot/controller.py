@@ -24,6 +24,8 @@ from .backend import Backend
 from .inbox import Candidate, Inbox
 from .relay import Relay
 from .state import State
+from .nordvpn import NordVPNProvider
+from .vpn_provider import ProviderState
 from .status import normalize_status
 from copy import deepcopy
 
@@ -142,6 +144,8 @@ class Controller:
         self.busy: str | None = None
         self.exit_ip = ("", 0.0)
         self.profile_checks: dict[str, dict] = {}
+        self.provider_scan = None
+        self.provider_scan_at = 0.0
         self.speed_result: dict | None = None
         self.remote = None               # operation the CLI is running right now (sync bus)
         self.bus_rev = -1
@@ -182,9 +186,10 @@ class Controller:
         r = self.relay
         if self.busy:
             return
-        if st == State.READY.value and r.guard is None and r.gate is None:
+        if (st == State.READY.value or
+                (st == State.ERROR.value and r.record.provider == "nordvpn" and r.record.forward_guard)) and r.guard is None:
             threading.Thread(target=self._arm, daemon=True).start()
-        elif st in (State.DISCONNECTED.value, State.ERROR.value) and (r.guard or r.gate):
+        elif st == State.DISCONNECTED.value and (r.guard or r.gate):
             r.stop_guard()
 
     def _arm(self) -> None:
@@ -192,7 +197,8 @@ class Controller:
         if r.lock.acquire(blocking=False):
             try:
                 r.reload()
-                if r.m.state == State.READY and r.guard is None and r.gate is None:
+                if (r.m.state == State.READY or
+                        (r.m.state == State.ERROR and r.record.provider == "nordvpn" and r.record.forward_guard)) and r.guard is None:
                     r.start_guard()
             finally:
                 r.lock.release()
@@ -257,7 +263,9 @@ class Controller:
                     return
                 rec = self.relay.record
                 s, _ = settings_mod.load()
-                if self.relay.m.state != State.DISCONNECTED and rec.tunnel_name and rec.tunnel_name not in running:
+                if self.relay.reconcile_external(s):
+                    pass
+                elif self.relay.m.state != State.DISCONNECTED and rec.tunnel_name and rec.tunnel_name not in running:
                     self.relay.m.force(State.ERROR)
                 elif self.relay.m.state == State.READY:
                     self.relay.start_guard(s)       # guard + approval; downgrades to 'vpn only' if the hotspot is off
@@ -325,19 +333,29 @@ class Controller:
             "band": rec.band or s["hotspot"]["band"], "security": s["hotspot"]["security"],
             "protection": rec.protection or s["vpn"]["protection"], "dns_lock": rec.dns_lock,
             "tunnel": rec.tunnel_name, "profile": rec.profile or s["vpn"].get("default_profile", ""),
+            "provider": rec.provider, "provider_protocol": rec.provider_protocol,
             "ready_since": rec.ready_since, "last_error": rec.last_error,
             "paused_until": self.tray_state.get("pause_until") or 0,
             "autostart": self._autostart_enabled(), "settings": s,
             "clients": [], "clients_full": [], "rx": 0, "tx": 0, "handshake": None, "hotspot_state": "",
             "endpoint": "", "uplink": self.snap.get("uplink", ""),
         }
-        profs, bad = profiles.list_profiles(paths.VPN_DIR)
+        external = bool(s["behavior"].get("profile_less"))
+        profs, bad = ([], []) if external else profiles.list_profiles(paths.VPN_DIR)
         snap["profile_objs"] = profs
         snap["bad_profiles"] = bad
         snap["profiles"] = [(p.path.name, p.label) for p in profs]
         prof = next((p for p in profs if p.path.name == snap["profile"]), profs[0] if profs else None)
-        snap["profile_label"] = prof.label if prof else "(no profile)"
-        if rec.tunnel_name:
+        snap["profile_label"] = "NordVPN" if external else (prof.label if prof else "(no profile)")
+        if external and (time.time() - self.provider_scan_at > 10 or self.provider_scan is None):
+            self.provider_scan = NordVPNProvider(self.backend).detect()
+            self.provider_scan_at = time.time()
+        if external and self.provider_scan:
+            snap["provider_status"] = self.provider_scan.state.value
+            snap["provider_reason"] = self.provider_scan.reason
+            snap["provider_protocol"] = self.provider_scan.protocol if self.provider_scan.adapter else rec.provider_protocol
+            snap["provider_adapter"] = self.provider_scan.adapter.name if self.provider_scan.adapter else ""
+        if rec.tunnel_name and rec.provider != "nordvpn":
             if self.wg is None:
                 self.wg = wireguard.find_wg(wireguard.find_wireguard(s["vpn"].get("wireguard_path", "")))
             if self.wg:
@@ -358,6 +376,13 @@ class Controller:
                 snap["hotspot_state"] = data.get("hotspot_state", "")
                 cl = clients_mod.merge(data)
                 self._apply_admission(snap, cl, s)
+        elif rec.provider == "nordvpn":
+            data, error = self.backend.hotspot_status(rec.tunnel_guid)
+            snap["hotspot_state"] = (data or {}).get("state", "")
+            if rec.state == State.READY.value and (error or snap["hotspot_state"] != "On"):
+                snap.update(state=State.ERROR.value, last_error="NordVPN hotspot is no longer active")
+            if self.provider_scan and self.provider_scan.state not in (ProviderState.CONNECTED, ProviderState.READY):
+                snap.update(state=State.ERROR.value, last_error=self.provider_scan.reason)
         elif rec.state not in (State.DISCONNECTED.value, State.ERROR.value):
             snap.update(state="UNKNOWN", fresh=False)
         if time.time() - self.snap.get("uplink_t", 0) > 60:
@@ -628,12 +653,17 @@ class Controller:
 
     def set_behavior(self, key: str, value) -> None:
         s, _ = settings_mod.load()
+        if key == "profile_less" and self.relay.record.tunnel_name:
+            self.events.put(("toast", "Stop hosting first", "Stop the current session before changing VPN mode.", True))
+            return
         s["behavior"][key] = value
         settings_mod.save(s)
         if key == "debug":
             log.enable() if value else log.disable()
         if key == "watch_downloads":
             self.inbox.start() if value else self.inbox.stop()
+        if key == "profile_less":
+            self.provider_scan_at = 0
         self.refresh_now()
 
     def cancel_pause(self) -> None:

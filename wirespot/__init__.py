@@ -1,15 +1,14 @@
-"""WireSpot - WireGuard x Mobile Hotspot for Windows.
+"""WireSpot - share a WireGuard profile or NordVPN through Mobile Hotspot.
 
-Turns a Windows laptop into a Wi-Fi router whose only way out is a WireGuard
-(Proton VPN) tunnel. Formerly "ProtonRelay CLI".
+Formerly "ProtonRelay CLI".
 """
 
 APP_NAME = "WireSpot"
 TAGLINE = "WireGuard x Mobile Hotspot"
-VERSION = "0.2.1"
+VERSION = "0.3.1"
 WEBSITE = "https://wirespot.vercel.app"
-TERMS_VERSION = "2"
-PRIVACY_VERSION = "2"
+TERMS_VERSION = "3"
+PRIVACY_VERSION = "3"
 
 # WireGuard tunnel names are limited to 32 chars of [A-Za-z0-9_=+.-].
 TUNNEL_PREFIX = "ws_"

@@ -1,6 +1,6 @@
 # WireSpot Terms of Use
 
-Effective 2026-09-24 · Version 2
+Effective 2026-09-25 · Version 3
 
 These terms cover the WireSpot website and downloads. WireSpot software is licensed under the GNU General Public License, version 3 only (GPL-3.0-only). Nothing in these terms limits or takes away any right granted by the GPL. If these terms conflict with the GPL for the software, the GPL controls. The full license is in `LICENSE`.
 
@@ -10,7 +10,7 @@ WireSpot runs as administrator and changes Windows networking while it operates.
 
 Device approval is a local control, not a guarantee that no unauthorized device can communicate. A newly joined device may have about one second of access before WireSpot applies the block. A device that rejoins with a randomized MAC address appears as a new request. Enforcement runs only while WireSpot is running.
 
-Profile ping and speed-test results are estimates. Some VPN servers do not answer ping; a successful ping does not verify a WireGuard connection. A speed test uses network data and measures the laptop's current route, which may differ from a connected device's speed.
+Profile ping, NordVPN path validation, and speed-test results are estimates. Some VPN servers do not answer ping; a successful ping does not verify a WireGuard connection. NordVPN path checks validate the laptop's tunnel route and hotspot sharing capability; connected-device behavior can still vary. A speed test uses network data and measures the laptop's current route, which may differ from a connected device's speed.
 
 ## No warranty and liability
 
@@ -18,7 +18,7 @@ The software and website are provided “as is,” without warranty, to the exte
 
 ## Names and affiliation
 
-WireSpot is an unofficial project. It is not affiliated with or endorsed by Proton AG, WireGuard LLC, Jason A. Donenfeld, or Microsoft. Their names and marks belong to their respective owners.
+WireSpot is an unofficial project. It is not affiliated with or endorsed by Nord Security, Proton AG, WireGuard LLC, Jason A. Donenfeld, or Microsoft. Their names and marks belong to their respective owners.
 
 ## Changes and contact
 

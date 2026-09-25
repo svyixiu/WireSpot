@@ -67,6 +67,7 @@ def status_rows(snap: dict) -> list[tuple[str, str]]:
     band = {"auto": "auto", "2.4": "2.4 GHz", "5": "5 GHz", "6": "6 GHz"}.get(snap.get("band"), snap.get("band") or "")
     traffic = f"{wireguard.fmt_bytes(snap.get('rx', 0))} in · {wireguard.fmt_bytes(snap.get('tx', 0))} out"
     label = snap.get("profile_label", "")
+    external = bool(snap.get("settings", {}).get("behavior", {}).get("profile_less"))
     if st == "live":
         n = len(snap.get("clients") or [])
         rows = [("hotspot", f"{snap['ssid']} · {band} · {snap.get('security', '').upper()}"), ("vpn", label),
@@ -84,6 +85,12 @@ def status_rows(snap: dict) -> list[tuple[str, str]]:
         rows = [("problem", (snap.get("last_error") or "the last session ended unexpectedly")[:42]), ("profile", label)]
     else:
         rows = [("profile", label), ("hotspot", f"{snap['ssid']} · {band} · off")]
+    if external:
+        rows = [("NordVPN" if k == "profile" else k, v) for k, v in rows]
+        if st == "idle":
+            rows.insert(0, ("connection", (snap.get("provider_reason") or "Checking NordVPN…")[:55]))
+        if snap.get("provider_adapter") and st in ("live", "vpn"):
+            rows.append(("protocol", snap.get("provider_protocol") or "Unknown"))
     if snap.get("uplink") and st in ("live", "vpn", "idle"):
         rows.append(("uplink", snap["uplink"]))
     return rows
@@ -135,7 +142,7 @@ def home_model(snap: dict, mode: str = "tray", busy: str | None = None, detail: 
         first = (snap.get("profile_label", "").split(" · ")[0])[:22]
         item("golive", "play", "Go live", first, primary=True, disabled=wait)
         profs = snap.get("profiles") or []
-        if len(profs) > 1:
+        if len(profs) > 1 and not b.get("profile_less"):
             item("profiles", "server", "Choose a profile", f"{len(profs)} available")
     add({"t": "rule", "id": "r2"})
     item("check_ip", "globe", "Check exit IP", snap.get("exit_ip") or "")
@@ -143,7 +150,9 @@ def home_model(snap: dict, mode: str = "tray", busy: str | None = None, detail: 
     item("copy_pw", "key", "Copy Wi-Fi password", snap.get("ssid", ""))
     item("cli", "terminal", "Open WireSpot CLI")
     add({"t": "rule", "id": "r3"})
-    add({"t": "bar", "id": "pages", "items": PAGES,
+    pages = [(k, icon, "Supported VPNs" if k == "profiles" and b.get("profile_less") else title)
+             for k, icon, title in PAGES]
+    add({"t": "bar", "id": "pages", "items": pages,
          "badges": {"devices": len(pending) or len(snap.get("clients") or []) or 0}})
     add({"t": "rule", "id": "r4"})
     item("autostart", "power", "Start with Windows", switch=bool(snap.get("autostart")))

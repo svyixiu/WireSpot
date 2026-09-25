@@ -1,25 +1,30 @@
 # WireSpot
 
-**WireGuard × Mobile Hotspot** for Windows 10/11 (formerly *ProtonRelay CLI*).
+**VPN × Mobile Hotspot** for Windows 10/11 (formerly *ProtonRelay CLI*).
 
-Turns a Windows laptop into a Wi-Fi router whose only way out is a WireGuard
-(Proton VPN) tunnel:
+Turns a Windows laptop into a Wi-Fi router that shares either a WireSpot-managed
+WireGuard tunnel or an active NordVPN desktop connection:
 
-**Website:** https://wirespot.vercel.app · **Installer:** [WireSpotSetup.exe](https://github.com/svyixiu/WireSpot/releases/latest/download/WireSpotSetup.exe) (Windows 10/11, v0.2.1).
+**Website:** https://wirespot.vercel.app · **Installer:** [WireSpotSetup.exe](https://github.com/svyixiu/WireSpot/releases/latest/download/WireSpotSetup.exe) (Windows 10/11, v0.3.1).
 
-    Existing Wi-Fi → laptop → WireGuard (Proton) → Mobile Hotspot → phone / console
+    Internet → WireGuard profile or NordVPN desktop app → WireSpot hotspot → phone / console
 
 ## Quick start
 
-1. Install [WireGuard for Windows](https://www.wireguard.com/install/).
+1. Install [WireGuard for Windows](https://www.wireguard.com/install/) for `.conf` profiles,
+   or install and connect with the NordVPN desktop app for Profile-less Mode.
 2. Run **`WireSpotSetup.exe`**. A short wizard explains what WireSpot is and what it
-   changes, checks for WireGuard and an older WireSpot, then shows where things go
+   changes, checks the selected VPN mode and an older WireSpot, then shows where things go
    (program: `%LOCALAPPDATA%\Programs\WireSpot`, data: `%APPDATA%\WireSpot`) with options:
    desktop shortcut, Start menu entry, Start with Windows, open when done. Run next to an old
    `portable\` folder, it offers to move those VPN profiles over (moved, not copied, so each
    private key exists once). An older WireSpot that won't close is closed for you on request;
    the VPN and hotspot keep running.
-3. Get a WireGuard `.conf` from your VPN provider. For Proton VPN, [sign in or create
+3. For NordVPN, connect in its desktop app, then enable **Settings → Advanced Settings →
+   Profile-less Mode**. The **Supported VPNs** page shows connection status. No `.conf` or
+   NordVPN login in WireSpot is needed. Profile-less Mode is off by default.
+
+   For a WireGuard profile, get a `.conf` from your VPN provider. For Proton VPN, [sign in or create
    an account](https://account.protonvpn.com/), open **Downloads → WireGuard configuration**,
    choose Windows and a server in the country you want, then select **Create → Download**.
    [Proton's official guide](https://protonvpn.com/support/wireguard-configurations) shows
@@ -50,11 +55,11 @@ no blinking).
 | Page | What it does |
 |---|---|
 | **Devices** | waiting devices (Allow / Block), connected devices (IP, name, device guess, MAC, vendor), blocked and remembered devices |
-| **Profiles** | WireGuard configs as cards: import, open the VPN folder, make default, check endpoint/handshake health, go live with a profile |
+| **Profiles / Supported VPNs** | WireGuard configs in normal mode; NordVPN detection and status in Profile-less Mode |
 | **Hotspot** | name, password (show/hide), band, security; balanced vs strict protection |
 | **Checks** | Quick, Wi-Fi, VPN, Hotspot, Sharing, Network, Devices and Full checks; user-started Cloudflare speed test; save a report |
 | **Activity** | what WireSpot did, in the app **and in the CLI** (secrets redacted) |
-| **Settings** | Start with Windows, Go live at startup, Approve new devices, fail-closed guard, DNS lock, watch Downloads, debug logging; open the data folder, the VPN folder, settings.json, the logs, the CLI; **Uninstall** |
+| **Settings** | Profile-less Mode, Start with Windows, Go live at startup, Approve new devices, fail-closed guard, DNS lock, watch Downloads, debug logging; open the data folder, the VPN folder, settings.json, the logs, the CLI; **Uninstall** |
 
 Decisions (for example "use balanced for this session?") and new `.conf` files appear as
 sheets with the recommended choice marked. **Quit WireSpot** exits; the VPN and hotspot
@@ -275,10 +280,10 @@ with both inside) with PyInstaller, then puts the installer in `release\` and re
 
 Tests: `py -3 -m unittest discover -s tests -t .`
 
-To build from source, install Python 3.11+ and run `py -3 -m pip install -r requirements.txt`, then `build.bat` on Windows. It runs the tests and bundles the app, CLI, and installer with PyInstaller. The source requires WireGuard for Windows and a Wi-Fi adapter that supports Mobile Hotspot for live use.
+To build from source, install Python 3.11+ and run `py -3 -m pip install -r requirements.txt`, then `build.bat` on Windows. It runs the tests and bundles the app, CLI, and installer with PyInstaller. Live use requires a Wi-Fi adapter that supports Mobile Hotspot, plus WireGuard for profile mode or the NordVPN desktop app for Profile-less Mode.
 
 ## License and privacy
 
 WireSpot is licensed under **GPL-3.0-only**. See [LICENSE](LICENSE) for the full license, [PRIVACY.md](PRIVACY.md) for local and website data handling, and [TERMS.md](TERMS.md) for website and download terms. The Terms do not limit GPL rights.
 
-Unofficial; not affiliated with Proton AG, WireGuard LLC, Jason A. Donenfeld, or Microsoft.
+Unofficial; not affiliated with Nord Security, Proton AG, WireGuard LLC, Jason A. Donenfeld, or Microsoft.

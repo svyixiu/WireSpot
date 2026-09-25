@@ -515,7 +515,9 @@ Emit $out
 UPLINK_PS = r"""
 $out = [ordered]@{ ok = $true; uplinks = @() }
 $tunnels = @(Get-NetAdapter -IncludeHidden -ErrorAction SilentlyContinue |
-    Where-Object { $_.InterfaceDescription -like 'WireGuard*' -or $_.InterfaceDescription -like '*Wintun*' } |
+    Where-Object { $_.InterfaceDescription -like 'WireGuard*' -or $_.InterfaceDescription -like '*Wintun*' -or
+                   $_.InterfaceDescription -like '*NordLynx*' -or $_.Name -like '*NordVPN*' -or
+                   $_.Name -like '*NordLynx*' } |
     ForEach-Object { [int]$_.ifIndex })
 $routes = @(Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue |
     Where-Object { $tunnels -notcontains [int]$_.InterfaceIndex })

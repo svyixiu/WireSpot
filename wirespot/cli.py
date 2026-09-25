@@ -429,6 +429,14 @@ def cmd_status(app: App, args):
         svcs, _ = b.wg_services()
         data, e = b.hotspot_status(rec.tunnel_guid)
     ours = [x for x in svcs if x.ours]
+    if rec.provider == "nordvpn" or app.settings["behavior"].get("profile_less"):
+        from .nordvpn import NordVPNProvider
+        status = NordVPNProvider(b).detect(validate=False)
+        ui.kv("NordVPN", status.reason)
+        if status.adapter:
+            ui.kv("Adapter", f"{status.adapter.name} · {status.protocol}")
+        if rec.forward_guard:
+            ui.kv("Forward guard", "active")
     if ours:
         env = b.env(app.settings["vpn"].get("wireguard_path", ""))
         for x in ours:
@@ -440,7 +448,7 @@ def cmd_status(app: App, args):
                 st, _ = show(env.wg, x.name)
                 for p in (st.peers if st else []):
                     ui.detail(f"{p.endpoint} · handshake {fmt_age(p.handshake_age())} · ↓ {fmt_bytes(p.rx)} ↑ {fmt_bytes(p.tx)}")
-    else:
+    elif not (rec.provider == "nordvpn" or app.settings["behavior"].get("profile_less")):
         ui.kv("VPN", "disconnected")
     if data:
         h = app.settings["hotspot"]
@@ -693,6 +701,7 @@ band auto|2.4|5|6                 'auto' follows the Wi-Fi uplink channel
 protection strict|balanced        see 'help protection'
 debug on|off                      write logs\\wirespot-YYYY-MM-DD.log
 guard on|off                      fail-closed watchdog while READY
+profile-less on|off               share a NordVPN app connection without a .conf
 dns-lock on|off                   balanced mode: force all DNS through the tunnel
 fallbacks on|off                  offer recovery choices when a step fails
 watch on|off                      listen for new .conf files in Downloads
@@ -701,7 +710,7 @@ wireguard-path <path>             custom wireguard.exe location"""
 
 
 @command("set", "set <key> <value>", "Change a setting (see 'help set')", "Settings", details=SET_HELP,
-         subs=("ssid", "password", "security", "band", "protection", "debug", "guard", "dns-lock",
+         subs=("ssid", "password", "security", "band", "protection", "debug", "guard", "dns-lock", "profile-less",
                "fallbacks", "watch", "autoconnect", "wireguard-path"))
 def cmd_set(app: App, args):
     if not args:
@@ -761,13 +770,16 @@ def cmd_set(app: App, args):
             ui.info("strict: WireGuard kill-switch (best leak protection for this PC), but it blocks hotspot DHCP/DNS.")
         else:
             ui.info("balanced: full VPN routing via /1 routes; hotspot-compatible; DNS lock keeps lookups in the tunnel.")
-    elif key in ("debug", "guard", "dns-lock", "fallbacks", "watch", "autoconnect", "approval"):
+    elif key in ("debug", "guard", "dns-lock", "fallbacks", "watch", "autoconnect", "approval", "profile-less"):
         if value.lower() not in onoff:
             ui.err("Use on or off.")
             return
         flag = onoff[value.lower()]
-        skey = {"dns-lock": "dns_lock", "fallbacks": "offer_fallbacks", "watch": "watch_downloads",
+        skey = {"dns-lock": "dns_lock", "profile-less": "profile_less", "fallbacks": "offer_fallbacks", "watch": "watch_downloads",
                 "approval": "approve_devices"}.get(key, key)
+        if key == "profile-less" and app.relay.record.tunnel_name:
+            ui.err("Stop the current WireSpot session before changing VPN modes.")
+            return
         bh[skey] = flag
         if key == "debug":
             if flag:
@@ -958,7 +970,9 @@ def startup_checks(app: App) -> None:
             ui.ok(f"Removed {removed} stale ProtonRelay config cop{'y' if removed == 1 else 'ies'} containing private keys.")
     legacy = [n for n in running if n.startswith(LEGACY_TUNNEL_PREFIXES)]
     rec = r.record
-    if legacy and not rec.tunnel_name:
+    if r.reconcile_external(app.settings):
+        ui.info("NordVPN is managed by its desktop app; WireSpot restored its hosting guard.")
+    elif legacy and not rec.tunnel_name:
         ui.info(f"A ProtonRelay 0.1 tunnel is still running: {', '.join(legacy)}.")
         ui.hint("'start' replaces it · 'stop' removes it")
         rec.tunnel_name = legacy[0]
@@ -984,11 +998,15 @@ def home_rows(app: App) -> list[str]:
         return f"{ui.color(k.ljust(9), ui.C.muted)}{v}"
 
     pw = "password set" if h["password"] else ui.color("password not set", ui.C.warning)
+    profile_text = f"{len(profs)}" + (f" · default {default.server_name or default.path.stem}"
+                    + (f" ({default.country})" if default.country else "") if default else " · none yet")
+    if s["behavior"].get("profile_less"):
+        profile_text = "NordVPN (connect in its app)"
     return [
-        row("profiles", f"{len(profs)}" + (f" · default {default.server_name or default.path.stem}"
-                                           + (f" ({default.country})" if default.country else "") if default else " · none yet")),
+        row("profiles", profile_text),
         row("hotspot", f"{h['ssid']} · {hs_mod.BAND_LABEL.get(h['band'], h['band'])} · {h['security'].upper()} · {pw}"),
-        row("mode", f"{s['vpn']['protection']} · the hotspot shares only the VPN tunnel"),
+        row("mode", "Profile-less · NordVPN" if s["behavior"].get("profile_less") else
+            f"{s['vpn']['protection']} · the hotspot shares only the VPN tunnel"),
         row("inbox", "watching Downloads for .conf files · or drop one here" if app.inbox.watching else "off"),
     ]
 
@@ -996,7 +1014,7 @@ def home_rows(app: App) -> list[str]:
 def home(app: App) -> None:
     s = app.settings
     profs, _ = app.profiles()
-    if not profs:
+    if not profs and not s["behavior"].get("profile_less"):
         ui.hint("Add a Proton WireGuard config first: drag the .conf onto this window.")
     elif not s["hotspot"]["password"]:
         ui.hint("Next: 'set password' (hidden prompt), then 'start'.")

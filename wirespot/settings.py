@@ -62,6 +62,8 @@ DEFAULT_SETTINGS: dict = {
         # Tray: go live automatically when it starts with Windows.
         "autoconnect": False,
         "debug": False,
+        # Share an externally managed NordVPN connection instead of a .conf.
+        "profile_less": False,
     },
 }
 

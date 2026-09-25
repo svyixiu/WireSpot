@@ -9,6 +9,8 @@ DEFAULT_STATUS = {
     "state": "UNKNOWN", "saved_state": "", "fresh": False, "busy": "",
     "ssid": "—", "band": "auto", "security": "wpa2", "protection": "balanced",
     "dns_lock": False, "tunnel": "", "profile": "", "profile_label": "(no profile)",
+    "provider": "", "provider_status": "", "provider_reason": "", "provider_protocol": "",
+    "provider_adapter": "",
     "ready_since": 0, "last_error": "", "paused_until": 0, "autostart": False,
     "clients": [], "clients_full": [], "profiles": [], "profile_objs": [], "bad_profiles": [],
     "rx": 0, "tx": 0, "handshake": None, "hotspot_state": "", "endpoint": "",

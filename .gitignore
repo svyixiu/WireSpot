@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 dist/
 build/
+build-profileless/
+dist-profileless/
 release/
 portable/
 logs/
