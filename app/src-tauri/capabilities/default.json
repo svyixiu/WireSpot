@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The WireSpot window, its startup splash and its tray pop-ups",
+  "windows": [
+    "main",
+    "splash",
+    "notify"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "opener:default",
+    "dialog:default",
+    "clipboard-manager:allow-write-text"
+  ]
+}

@@ -5,7 +5,7 @@
 Turns a Windows laptop into a Wi-Fi router that shares either a WireSpot-managed
 WireGuard tunnel or an active NordVPN desktop connection:
 
-**Website:** https://wirespot.vercel.app · **Installer:** [WireSpotSetup.exe](https://github.com/svyixiu/WireSpot/releases/latest/download/WireSpotSetup.exe) (Windows 10/11, v0.3.1).
+**Website:** https://wirespot.vercel.app · **Download:** [WireSpot.exe](https://github.com/svyixiu/WireSpot/releases/latest/download/WireSpot.exe) (Windows 10/11, v0.4.0; one file that installs itself).
 
     Internet → WireGuard profile or NordVPN desktop app → WireSpot hotspot → phone / console
 
@@ -13,13 +13,16 @@ WireGuard tunnel or an active NordVPN desktop connection:
 
 1. Install [WireGuard for Windows](https://www.wireguard.com/install/) for `.conf` profiles,
    or install and connect with the NordVPN desktop app for Profile-less Mode.
-2. Run **`WireSpotSetup.exe`**. A short wizard explains what WireSpot is and what it
-   changes, checks the selected VPN mode and an older WireSpot, then shows where things go
-   (program: `%LOCALAPPDATA%\Programs\WireSpot`, data: `%APPDATA%\WireSpot`) with options:
-   desktop shortcut, Start menu entry, Start with Windows, open when done. Run next to an old
-   `portable\` folder, it offers to move those VPN profiles over (moved, not copied, so each
-   private key exists once). An older WireSpot that won't close is closed for you on request;
-   the VPN and hotspot keep running.
+2. Run **`WireSpot.exe`**. Started from anywhere but its install folder, it shows its
+   installer first: what WireSpot is, whether WireGuard is there, an older WireSpot it will
+   update, and where things go (program: `%LOCALAPPDATA%\Programs\WireSpot`, data:
+   `%APPDATA%\WireSpot`), with options for a desktop shortcut, a Start menu entry and Start
+   with Windows. You agree to the Terms of Use, it installs, and **Open WireSpot** starts
+   the installed copy. Run next to an old `portable\` folder, it moves those VPN profiles
+   over (moved, not copied, so each private key exists once). An older WireSpot that won't
+   close is closed for you on request; the VPN and hotspot keep running. **Run without
+   installing** uses it straight away instead. To update, just run the newer `WireSpot.exe`:
+   a running WireSpot hands over to it.
 3. For NordVPN, connect in its desktop app, then enable **Settings → Advanced Settings →
    Profile-less Mode**. The **Supported VPNs** page shows connection status. No `.conf` or
    NordVPN login in WireSpot is needed. Profile-less Mode is off by default.
@@ -38,39 +41,40 @@ shortcut for it.
 
 ## Desktop app
 
-The window **is the tray menu**, as an app: the same list, the same rows, the same live
-values (`panel.py` renders both). It is tall and narrow, with fully custom chrome: no
-Windows title bar, no resize border, two mac-style dots top-left (**close** hides it to
-the tray, **minimise** sends it to the taskbar), and you drag it by the header. It is still a
-normal app on the taskbar: click the button to minimise or restore it, right-click it for
-*Close window*; Alt-Tab and Alt+F4 work. Every
-symbol is an SVG icon (`wirespot/icons.py`, exported to `assets/icons/`), not a Unicode
-glyph.
+The window is built with Rust ([Tauri](https://tauri.app)) and Vue (`app\`), in the same
+design as Questly: a wide, calm layout with a warm glow behind everything, cream "paper"
+cards for what matters, pill buttons and tabs, with themes and accent colours (the app
+icon follows the accent). It has custom chrome: two mac-style dots top-left (**close**
+hides it to the tray, **minimise** sends it to the taskbar), and you drag it by the title
+bar. Every symbol is an SVG icon from `wirespot/icons.py`.
 
-Six tiles open pages that slide in: **Devices**, **Profiles**, **Hotspot**, **Checks**,
-**Activity** and **Settings**. Rows fade on hover, switches slide, sheets rise over a
-dimmed copy of the page, scrolling glides, and live values update in place (no rebuild,
-no blinking).
+All the networking stays in Python: the window runs the **WireSpot engine**
+(`wirespot/bridge.py`, `WireSpotEngine.exe` in a build), the same code the CLI uses, and
+talks to it in JSON lines. The engine never sends VPN private keys to the window. If the
+engine stops, the window says so and starts it again; the VPN and hotspot are Windows
+services and aren't affected.
 
 | Page | What it does |
 |---|---|
+| **Home** | the state in words with the main button (Go live, Disconnect, Resume), the status lines, devices with Allow / Block, every action and the everyday switches |
 | **Devices** | waiting devices (Allow / Block), connected devices (IP, name, device guess, MAC, vendor), blocked and remembered devices |
 | **Profiles / Supported VPNs** | WireGuard configs in normal mode; NordVPN detection and status in Profile-less Mode |
 | **Hotspot** | name, password (show/hide), band, security; balanced vs strict protection |
 | **Checks** | Quick, Wi-Fi, VPN, Hotspot, Sharing, Network, Devices and Full checks; user-started Cloudflare speed test; save a report |
 | **Activity** | what WireSpot did, in the app **and in the CLI** (secrets redacted) |
-| **Settings** | Profile-less Mode, Start with Windows, Go live at startup, Approve new devices, fail-closed guard, DNS lock, watch Downloads, debug logging; open the data folder, the VPN folder, settings.json, the logs, the CLI; **Uninstall** |
+| **Settings** | theme and accent (or your own colours); Start with Windows, Go live at startup; Approve new devices, fail-closed guard, DNS lock; Profile-less Mode, watch Downloads, debug logging; open the data folder, the VPN folder, settings.json, the logs, the CLI; About with the changelog; **Uninstall** |
 
 Decisions (for example "use balanced for this session?") and new `.conf` files appear as
-sheets with the recommended choice marked. **Quit WireSpot** exits; the VPN and hotspot
-keep running. Launching WireSpot again brings the running window forward.
+dialogs with the recommended choice marked (keys 1-9, Enter, Esc). **Quit WireSpot**
+exits; the VPN and hotspot keep running. Launching WireSpot again brings the running
+window forward.
 
 ## Device approval
 
 With **Approve new devices** on (the default), a device that joins the hotspot gets
-**no network until you allow it**: a toast with **Allow / Block** appears, the tray
-menu and window show it under *Waiting for approval*, and the CLI prints it (`allow 1`,
-`block 1`, `waiting`). Allowed devices are remembered; **Forget** asks again next time.
+**no network until you allow it**: while WireSpot is in the tray a pop-up with **Allow /
+Block** appears in the corner of the screen, the window shows it on Home and Devices, and
+the CLI prints it (`allow 1`, `block 1`, `waiting`). Allowed devices are remembered; **Forget** asks again next time.
 
 Mobile Hotspot has no per-device API, so WireSpot enforces this on the laptop: within
 about a second of a new device's first packet it pins that device's address on the
@@ -118,22 +122,25 @@ has (● · └ ┌ ›), so nothing renders as a box. When a step fails, WireSp
 
 ## Icon
 
-`assets/wirespot.svg` is the vector master: a single lightning bolt, in the
-Claude palette. `assets/wirespot.ico` is generated from the same geometry (`python -m
-wirespot.icon out.ico out.svg`); the tray recolours it per state (live, VPN only, idle,
-busy, paused, error).
+A soft cream lightning bolt on a rounded clay tile: every corner of the bolt, the tips
+included, is rounded off. One geometry in `wirespot/icon.py` drives everything:
+`assets/wirespot.svg` (the vector master), the `.ico` files (`python -m wirespot.icon
+out.ico out.svg`), the tray icons, recoloured per state (live, VPN only, idle, busy,
+paused, error), and the app's copy (`app/scripts/export-icons.py` writes
+`app/src/data/logo.ts`, which the window, the splash and the taskbar icon draw).
 
 ## Tray
 
 The WireSpot icon sits next to the clock and shows the state: clay = live, clay mark on
-dark = VPN only, grey = idle, pause bars = paused, crail "!" = needs attention. Clicking
-it opens the **same panel as the window** (not the stock Windows menu). It stays open
-while you use it and closes only when you click somewhere else or press Esc, and it
-updates in place, so it never blinks.
+dark = VPN only, grey = idle, pause bars = paused, crail "!" = needs attention; its tooltip
+has the details. Clicking it opens or hides the window; right-clicking it gives the
+everyday actions (Go live / Disconnect / Resume, Pause 15 minutes, Copy Wi-Fi password,
+Open WireSpot CLI, Quit).
 
-Toasts in the same design announce devices joining, waiting for approval (with Allow /
-Block buttons) or leaving, the guard stopping the hotspot, and the result of every action,
-including actions run in the CLI.
+While the window is closed, pop-ups in the same design appear in the corner of the screen:
+devices waiting for approval (with Allow / Block), the guard stopping the hotspot, and the
+result of every action, including actions run in the CLI. They never take the keyboard
+focus from what you're doing, and they go away once answered or opened.
 
 **Start with Windows** registers a Task Scheduler logon task with highest privileges
 (`\WireSpot\WireSpot Tray`). WireSpot starts elevated in the tray at logon **without
@@ -260,12 +267,15 @@ uplink and Wi-Fi Direct adapter state at that moment and offers `band auto`.
 ## Files
 
 ```
-Installed (WireSpotSetup.exe)
-  %LOCALAPPDATA%\Programs\WireSpot\   WireSpot.exe (app: window + tray), WireSpotCLI.exe, install.json
+Installed (WireSpot.exe -> Install)
+  %LOCALAPPDATA%\Programs\WireSpot\   WireSpot.exe (the app: window + tray), WireSpotEngine.exe (its engine),
+                                        WireSpotCLI.exe, install.json
   %APPDATA%\WireSpot\                  settings.json, vpn\*.conf (your profiles), logs\
+  %LOCALAPPDATA%\app.wirespot.desktop\ the window's own storage (theme, accent)
   Desktop\WireSpot.lnk                  the app
-Portable (WireSpot.exe next to settings.json or vpn\)
+Portable (WireSpot.exe next to settings.json or vpn\, or "Run without installing")
   <folder>\                            the same data files, next to the exe
+  %LOCALAPPDATA%\WireSpot\bin\<version>\  the engine and CLI, unpacked from WireSpot.exe
 Both
   %ProgramData%\WireSpot\              runtime configs (admin-only), state.json (ownership record),
                                         devices.json (approved/blocked), pause.json, bus.json + activity.log (sync), icons
@@ -273,14 +283,24 @@ Both
 
 ## Build
 
-`build.bat` runs the unit tests, draws the icon and exports the SVG icon set, builds
-`WireSpot.exe` (app), `WireSpotCLI.exe` (CLI) and `WireSpotSetup.exe` (the installer,
-with both inside) with PyInstaller, then puts the installer in `release\` and refreshes
+`build.bat` runs the unit tests, draws the icons, builds `WireSpotEngine.exe` and
+`WireSpotCLI.exe` with PyInstaller, then builds the app (`app\`, Tauri) with both inside
+it: one `WireSpot.exe` in `release\`, which installs itself. It also refreshes
 `portable\` (your `portable\settings.json` and `portable\vpn\` are kept).
 
-Tests: `py -3 -m unittest discover -s tests -t .`
+You need Python 3.11+ (`py -3 -m pip install -r requirements.txt`), Node.js with pnpm, and
+Rust. Tests: `py -3 -m unittest discover -s tests -t .` and, in `app\src-tauri`,
+`cargo test`.
 
-To build from source, install Python 3.11+ and run `py -3 -m pip install -r requirements.txt`, then `build.bat` on Windows. It runs the tests and bundles the app, CLI, and installer with PyInstaller. Live use requires a Wi-Fi adapter that supports Mobile Hotspot, plus WireGuard for profile mode or the NordVPN desktop app for Profile-less Mode.
+Working on the window: `cd app`, `pnpm install`, then `pnpm dev` shows it in a browser with
+a pretend engine (add `?setup` to the address for the installer), and `pnpm tauri dev`
+runs the real app against the Python sources (as your user, so it can't go live).
+
+WireSpot runs as administrator. Its engine sits in a folder your user can write to, so
+before starting it WireSpot checks it's byte-for-byte the copy inside `WireSpot.exe` and
+keeps it locked while running (`app/src-tauri/src/payload.rs`).
+
+Live use requires a Wi-Fi adapter that supports Mobile Hotspot, plus WireGuard for profile mode or the NordVPN desktop app for Profile-less Mode.
 
 ## License and privacy
 

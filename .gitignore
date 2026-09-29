@@ -18,3 +18,8 @@ test-results.txt
 regression-results.txt
 packaging-results.txt
 graphify-update.txt
+# desktop app (Tauri + Vue)
+node_modules/
+app/src-tauri/target/
+app/src-tauri/gen/
+app/src-tauri/payload/

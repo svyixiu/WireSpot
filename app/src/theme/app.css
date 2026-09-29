@@ -1,0 +1,193 @@
+/*
+ * Pieces every WireSpot page shares, on top of the design tokens in style.css:
+ * card titles, setting rows, key/value lines, choice buttons and report lines.
+ */
+@layer components {
+    .card-title {
+        font-family: var(--font-display);
+        font-size: 1.25rem;
+        font-weight: 800;
+        color: var(--ink);
+        letter-spacing: -0.02em;
+    }
+
+    /* a setting: text on the left, its control on the right */
+    .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.25rem;
+        padding: 0.8rem 0;
+        border-top: 1px solid var(--line);
+    }
+
+    .row-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--ink);
+    }
+
+    .row-desc {
+        font-size: 0.75rem;
+        color: var(--muted);
+        margin-top: 0.15rem;
+        line-height: 1.1rem;
+    }
+
+    /* "label ........ value" */
+    .kv {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        font-size: 0.8125rem;
+        padding: 0.3rem 0;
+    }
+
+    .kv > :first-child {
+        color: var(--muted);
+        flex-shrink: 0;
+    }
+
+    .kv > :last-child {
+        color: var(--ink-2);
+        font-weight: 500;
+        text-align: right;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* a big option button: title + description */
+    .choice {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        text-align: left;
+        padding: 0.85rem 1rem;
+        border-radius: 16px;
+        border: 1px solid var(--line-strong);
+        transition: background-color 150ms ease, border-color 150ms ease, transform 220ms var(--ease-spring);
+    }
+
+    .choice:hover {
+        background: var(--glass-3);
+        border-color: var(--ink-2);
+    }
+
+    .choice:active {
+        transform: scale(0.98);
+    }
+
+    .choice.on {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+    }
+
+    .doc-link {
+        color: var(--ink-2);
+        font-weight: 600;
+        text-decoration: underline;
+        text-decoration-color: var(--line-strong);
+        text-underline-offset: 3px;
+        transition: color 150ms ease, text-decoration-color 150ms ease;
+    }
+
+    .doc-link:hover {
+        color: var(--ink);
+        text-decoration-color: var(--accent);
+    }
+
+    /* an action row in a list (Home controls, Settings > Your files) */
+    .action {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        height: 2.6rem;
+        padding: 0 0.85rem;
+        border-radius: 14px;
+        text-align: left;
+        color: var(--ink);
+        transition: background-color 150ms ease, transform 220ms var(--ease-spring), opacity 150ms ease;
+    }
+
+    .action:hover:not(:disabled) {
+        background: var(--glass-2);
+    }
+
+    .action:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+
+    .action:disabled {
+        opacity: 0.4;
+    }
+
+    .action > svg {
+        width: 17px;
+        height: 17px;
+        color: var(--ink-2);
+    }
+
+    .action .hint {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 55%;
+    }
+
+    .action.danger,
+    .action.danger > svg {
+        color: var(--danger);
+    }
+
+    /* page header: eyebrow + big headline */
+    .page-head {
+        padding: 0 0.5rem 1rem;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .page-title {
+        font-family: var(--font-display);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        font-size: 34px;
+        line-height: 38px;
+        color: var(--ink);
+        margin-top: 0.25rem;
+    }
+
+    .note {
+        border-radius: 16px;
+        padding: 0.65rem 0.9rem;
+        font-size: 0.75rem;
+        line-height: 1.15rem;
+        color: var(--ink-2);
+        background: var(--glass-2);
+    }
+
+    .note.warn {
+        background: var(--warn-soft);
+        color: var(--warn);
+    }
+
+    .note.danger {
+        background: var(--danger-soft);
+        color: var(--danger);
+    }
+
+    .note.ok {
+        background: var(--ok-soft);
+        color: var(--ok);
+    }
+}
