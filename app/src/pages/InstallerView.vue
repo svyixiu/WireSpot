@@ -94,6 +94,46 @@ async function launch() {
     }
 }
 
+// Started by an update from the installed WireSpot: the Terms were agreed to there,
+// so it installs right away (keeping the shortcuts and Start with Windows as they
+// are) and opens the new version.
+const autoUpdate = computed(() => !!shell.info.value?.update);
+let autoUpdateStarted = false;
+
+async function runUpdate() {
+    progress.value = [];
+    error.value = '';
+    stillRunning.value = false;
+    step.value = 'installing';
+    try {
+        const [result] = await Promise.all([
+            engine.call<InstallResult>('install', { update: true }),
+            new Promise(r => setTimeout(r, 700)),
+        ]);
+        if (result.ok) await launch();
+        else {
+            error.value = result.error ?? 'Something went wrong.';
+            step.value = 'error';
+        }
+    } catch (e) {
+        error.value = errorText(e);
+        step.value = 'error';
+    }
+}
+
+// the engine has to be up first
+watch([engine.hello, autoUpdate], ([hello, auto]) => {
+    if (hello && auto && !autoUpdateStarted) {
+        autoUpdateStarted = true;
+        runUpdate();
+    }
+}, { immediate: true });
+
+function retry() {
+    if (autoUpdate.value) runUpdate();
+    else install();
+}
+
 const features = [
     ['Share your VPN over Wi-Fi', 'A WireGuard profile, or the NordVPN app you already use, for your phone, console or tablet.'],
     ['You decide who joins', 'New devices wait for your approval before they get any network.'],
@@ -220,7 +260,7 @@ const features = [
                     <div v-else-if="step === 'installing'" key="installing" class="h-full flex flex-col justify-center">
                         <div class="flex items-center gap-3 text-ink">
                             <span class="spinner !w-5 !h-5"></span>
-                            <h2 class="display text-[28px] leading-[30px]">{{ updating ? 'Updating…' : 'Installing…' }}</h2>
+                            <h2 class="display text-[28px] leading-[30px]">{{ updating || autoUpdate ? 'Updating…' : 'Installing…' }}</h2>
                         </div>
                         <TransitionGroup name="list" tag="ul" class="relative mt-4 space-y-1 text-sm text-muted">
                             <li v-for="(line, i) in progress" :key="i" class="flex items-center gap-2">
@@ -278,7 +318,7 @@ const features = [
                 <template v-else-if="step === 'error'">
                     <button class="btn btn-glass" @click="step = 'welcome'">Back</button>
                     <button v-if="stillRunning" class="btn btn-danger ml-auto" @click="install(true)">Close it and install</button>
-                    <button v-else class="btn btn-primary ml-auto" @click="install()">Try again</button>
+                    <button v-else class="btn btn-primary ml-auto" @click="retry()">Try again</button>
                 </template>
             </div>
         </section>

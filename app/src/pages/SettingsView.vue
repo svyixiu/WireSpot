@@ -14,12 +14,18 @@ import ColorField from '@/components/ColorField.vue';
 import RangeSlider from '@/components/RangeSlider.vue';
 import LogoMark from '@/components/LogoMark.vue';
 import Icon from '@/components/Icon.vue';
+import UpdateModal from '@/components/UpdateModal.vue';
+import { formatBytes, useUpdater } from '@/composables/updater';
 
 const { settings, defaults } = useSettings();
 const { toast } = useToasts();
 const engine = useEngine();
 const { snap, hello } = engine;
 const dialogs = useDialogs();
+const updater = useUpdater();
+const checkedTime = computed(() => updater.checkedAt.value
+    ? new Date(updater.checkedAt.value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '');
 
 // ----- appearance (the window's own settings) -----
 const customAccent = computed(() => settings.value.accent !== null && !ACCENTS.includes(settings.value.accent));
@@ -368,7 +374,44 @@ const FILES = [
                         </div>
                     </div>
 
+                    <!-- updates -->
                     <div class="row mt-5">
+                        <div class="min-w-0 flex-1">
+                            <div class="row-title">Updates</div>
+                            <div class="row-desc" :class="{ '!text-danger': updater.state.value === 'error' }">
+                                <template v-if="updater.state.value === 'checking'">Looking for a newer version…</template>
+                                <template v-else-if="updater.state.value === 'latest'">
+                                    You have the latest version ({{ updater.info.value?.current }}) · checked at {{ checkedTime }}.
+                                </template>
+                                <template v-else-if="updater.state.value === 'available'">
+                                    WireSpot {{ updater.info.value?.latest }} is available.
+                                </template>
+                                <template v-else-if="updater.state.value === 'downloading'">
+                                    Downloading {{ updater.info.value?.latest }}: {{ formatBytes(updater.downloaded.value) }} of
+                                    {{ formatBytes(updater.total.value) }}
+                                </template>
+                                <template v-else-if="updater.state.value === 'installing'">Restarting to update…</template>
+                                <template v-else-if="updater.state.value === 'error'">{{ updater.error.value }}</template>
+                                <template v-else>Looks for a newer WireSpot on GitHub. Nothing is downloaded until you say so.</template>
+                            </div>
+                            <div v-if="updater.state.value === 'downloading'" class="h-1.5 rounded-full bg-glass-3 mt-2 overflow-hidden max-w-sm">
+                                <div class="h-full rounded-full bg-accent transition-[width] duration-200 ease-linear"
+                                    :style="{ width: `${updater.total.value ? Math.min(100, updater.downloaded.value / updater.total.value * 100) : 0}%` }"></div>
+                            </div>
+                        </div>
+                        <button v-if="updater.state.value === 'available' || updater.state.value === 'downloading'"
+                            class="btn btn-primary btn-sm shrink-0" @click="updater.dialogOpen.value = true">
+                            {{ updater.state.value === 'available' ? "See what's new" : 'Show progress' }}
+                        </button>
+                        <button v-else class="btn btn-glass btn-sm shrink-0"
+                            :disabled="updater.state.value === 'checking' || updater.state.value === 'installing'"
+                            @click="updater.state.value === 'error' ? updater.retry() : updater.check()">
+                            <span v-if="updater.state.value === 'checking'" class="spinner"></span>
+                            {{ updater.state.value === 'error' ? 'Try again' : updater.state.value === 'latest' ? 'Check again' : 'Check for updates' }}
+                        </button>
+                    </div>
+
+                    <div class="row">
                         <div class="min-w-0">
                             <div class="row-title">Terms &amp; privacy</div>
                             <div class="row-desc">
@@ -390,6 +433,7 @@ const FILES = [
                 </section>
             </div>
         </div>
+        <UpdateModal />
     </div>
 </template>
 

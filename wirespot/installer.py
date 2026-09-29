@@ -326,8 +326,10 @@ def schedule_removal(dest: Path, extra_dirs: list[Path] = ()) -> None:
         still_there = " -or ".join(f"(Test-Path -LiteralPath {_q(d)})" for d in dirs)
         script += (f";for($i=0;$i -lt 20;$i++){{Remove-Item -LiteralPath {','.join(_q(d) for d in dirs)} -Recurse "
                    f"-Force -ErrorAction SilentlyContinue;if(-not ({still_there})){{break}};Start-Sleep -Milliseconds 500}}")
+    # CREATE_NO_WINDOW only: PowerShell started with DETACHED_PROCESS quits without
+    # running its command, which left the program files behind after uninstalling
     subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script],
-                     creationflags=(subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS) if os.name == "nt" else 0,
+                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                      close_fds=True)
 
 

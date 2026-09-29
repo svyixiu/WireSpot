@@ -53,6 +53,10 @@ SNAP_KEYS = ("state", "saved_state", "fresh", "busy", "ssid", "band", "security"
              "profiles", "clients")
 
 
+# returned by a handler that answers later, from its own thread
+_DEFERRED = object()
+
+
 def send(obj: dict) -> None:
     line = json.dumps(obj, ensure_ascii=False, default=_jsonable)
     with _OUT_LOCK:
@@ -134,6 +138,11 @@ class Bridge:
         self.ids = itertools.count(1)
         self.report = ("", [])
         self.quitting = False
+        self._rid = None
+        # updates: what the last check found, and the download in progress
+        self._update: dict | None = None
+        self._update_thread: threading.Thread | None = None
+        self._update_cancel = threading.Event()
 
     # host interface for model.dispatch
     is_tray = False
@@ -156,6 +165,10 @@ class Bridge:
     def run(self) -> int:
         ctl = self.ctl
         threading.Thread(target=self._read_requests, name="bridge-stdin", daemon=True).start()
+        if paths.is_installed():
+            from . import updater
+
+            threading.Thread(target=updater.clean_downloads, name="update-cleanup", daemon=True).start()
         ctl.start()
         event("ready", self.hello())
         while not self.quitting:
@@ -233,10 +246,13 @@ class Bridge:
     def _handle_request(self, msg: dict) -> None:
         rid, method, params = msg.get("id"), msg.get("method", ""), msg.get("params") or {}
         handler = getattr(self, "rpc_" + method, None)
+        self._rid = rid
         try:
             if handler is None:
                 raise ValueError(f"unknown method: {method}")
             result = handler(**params)
+            if result is _DEFERRED:
+                return
             if rid is not None:
                 send({"id": rid, "result": result})
         except Exception as e:
@@ -260,6 +276,66 @@ class Bridge:
 
     def rpc_hello(self):
         return self.hello()
+
+    def _answer_later(self, work) -> object:
+        """Answers the current request with ``work()``'s result from its own thread:
+        network calls must not hold up the loop that runs the guard."""
+        rid = self._rid
+
+        def run():
+            try:
+                result = work()
+                if rid is not None:
+                    send({"id": rid, "result": result})
+            except Exception as e:
+                log.event("error", f"bridge: {e}")
+                if rid is not None:
+                    send({"id": rid, "error": str(e)})
+
+        threading.Thread(target=run, daemon=True).start()
+        return _DEFERRED
+
+    # ------------------------------------------------------------------ updates
+    def rpc_update_check(self):
+        from . import updater
+
+        def work():
+            info = updater.check()
+            self._update = info if info["available"] else None
+            return updater.public(info)
+
+        return self._answer_later(work)
+
+    def rpc_update_download(self):
+        """Starts the download; "update_progress" events follow, then "update_ready"
+        (with the checked file) or "update_failed"."""
+        from . import updater
+
+        info = self._update
+        if info is None:
+            raise ValueError("Check for updates first.")
+        if self._update_thread is not None and self._update_thread.is_alive():
+            raise ValueError("The update is already downloading.")
+        self._update_cancel = cancel = threading.Event()
+
+        def work():
+            try:
+                path = updater.download(
+                    info, lambda done, total: event("update_progress", {"downloaded": done, "total": total}), cancel)
+                event("update_ready", {"path": str(path), "version": info["latest"]})
+            except updater.Cancelled:
+                event("update_failed", {"cancelled": True, "error": ""})
+            except Exception as e:
+                log.event("error", f"update download: {e}")
+                event("update_failed", {"cancelled": False, "error": str(e)})
+
+        self._update_thread = threading.Thread(target=work, name="update-download", daemon=True)
+        self._update_thread.start()
+        return True
+
+    def rpc_update_cancel(self):
+        self._update_cancel.set()
+        return True
 
     def rpc_snapshot(self):
         return snap_view(self.ctl)
@@ -511,8 +587,10 @@ class SetupBridge:
                 "wireguard": bool(wireguard.find_wireguard(""))}
 
     def rpc_install(self, desktop: bool = True, start_menu: bool = True, start_with_windows: bool | None = None,
-                    force_close: bool = False):
-        from . import installer
+                    force_close: bool = False, update: bool = False):
+        """``update``: started by an update from the installed copy. Its shortcuts, Start with
+        Windows and when the Terms were agreed to all stay as they were."""
+        from . import installer, updater
 
         app_exe = os.environ.get("WIRESPOT_APP_EXE") or str(paths.exe("WireSpot.exe"))
         files = {"WireSpot.exe": Path(app_exe),
@@ -520,11 +598,14 @@ class SetupBridge:
                  "WireSpotCLI.exe": paths.exe("WireSpotCLI.exe")}
         accepted = {"terms": TERMS_VERSION, "privacy": PRIVACY_VERSION,
                     "at": datetime.now().astimezone().isoformat(timespec="seconds")}
+        if update:
+            accepted = updater.previous_acceptance() or accepted
         try:
             result = installer.install(files, progress=lambda text: event("setup_progress", {"text": text}),
-                                       legacy_near=paths.APP_DIR, desktop=bool(desktop), start_menu=bool(start_menu),
-                                       start_with_windows=start_with_windows, force_close=bool(force_close),
-                                       accepted=accepted)
+                                       legacy_near=paths.APP_DIR, shortcuts=not update, desktop=bool(desktop),
+                                       start_menu=bool(start_menu),
+                                       start_with_windows=None if update else start_with_windows,
+                                       force_close=bool(force_close or update), accepted=accepted)
         except installer.AppStillRunning as e:
             return {"ok": False, "still_running": True, "error": str(e)}
         except Exception as e:

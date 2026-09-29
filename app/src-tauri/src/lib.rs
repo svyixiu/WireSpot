@@ -68,7 +68,9 @@ fn quit_and_start(app: &AppHandle, exe: &Path, args: &[String]) -> Result<(), St
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000 | 0x0000_0008); // CREATE_NO_WINDOW | DETACHED_PROCESS
+        // a hidden console, not none at all: PowerShell started with DETACHED_PROCESS
+        // quits without running its command, so the other WireSpot never started
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
     cmd.spawn().map_err(|e| format!("Couldn't start {}: {}", exe.display(), e))?;
     quit(app);
@@ -192,7 +194,46 @@ fn shell_info(app: AppHandle) -> serde_json::Value {
         "installed_exe": installed_exe().to_string_lossy(),
         "installed_exists": installed_exe().is_file(),
         "dev": cfg!(debug_assertions),
+        // started by an update: install over the installed copy and open it
+        "update": env::args().any(|a| a == "--update"),
     })
+}
+
+/// A downloaded WireSpot (WireSpot-<version>.exe) inside `dir`, after resolving
+/// `..` and links, so nothing else can be started as an "update".
+fn is_update_file(file: &Path, dir: &Path) -> bool {
+    let inside = match (file.canonicalize(), dir.canonicalize()) {
+        (Ok(f), Ok(d)) => f.starts_with(&d),
+        _ => false,
+    };
+    let named = file
+        .file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.starts_with("WireSpot-") && n.ends_with(".exe"));
+    inside && named && file.is_file()
+}
+
+/// Where the engine keeps downloaded updates: WireSpot's ProgramData folder,
+/// which only SYSTEM and Administrators may write (wirespot/updater.py).
+fn updates_dir() -> PathBuf {
+    env_dir("WIRESPOT_DATA")
+        .unwrap_or_else(|| env_dir("ProgramData").unwrap_or_else(|| PathBuf::from(r"C:\ProgramData")).join("WireSpot"))
+        .join("updates")
+}
+
+/// Settings → Check for updates, once the engine has downloaded the update and
+/// checked it against GitHub's checksum: quit and start it. An installed
+/// WireSpot passes --update, so the new file installs itself over this one.
+/// Only a WireSpot download in the updates folder is ever started.
+#[tauri::command]
+fn install_update(app: AppHandle, path: String) -> Result<(), String> {
+    let file = PathBuf::from(&path);
+    if !is_update_file(&file, &updates_dir()) {
+        return Err("That isn't a downloaded WireSpot update.".into());
+    }
+    let installed = env::current_exe().map(|this| same_file(&this, &installed_exe())).unwrap_or(false);
+    let args: Vec<String> = if installed { vec!["--update".into()] } else { Vec::new() };
+    quit_and_start(&app, &file, &args)
 }
 
 /// "Run without installing": leave the installer and start WireSpot as it is.
@@ -288,6 +329,7 @@ pub fn run() {
             shell_info,
             run_portable,
             launch_installed,
+            install_update,
             notify::notify_state,
             notify::notify_resize,
             brand::splash_stage,
@@ -298,4 +340,29 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running WireSpot");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn only_downloaded_updates_can_be_started() {
+        let root = std::env::temp_dir().join(format!("wirespot-update-test-{}", std::process::id()));
+        let dir = root.join("updates");
+        fs::create_dir_all(&dir).unwrap();
+        fs::create_dir_all(root.join("elsewhere")).unwrap();
+        let good = dir.join("WireSpot-9.9.9.exe");
+        fs::write(&good, b"MZ").unwrap();
+        fs::write(dir.join("evil.exe"), b"MZ").unwrap();
+        fs::write(root.join("elsewhere").join("WireSpot-9.9.9.exe"), b"MZ").unwrap();
+
+        assert!(is_update_file(&good, &dir));
+        assert!(!is_update_file(&dir.join("evil.exe"), &dir), "any other name");
+        assert!(!is_update_file(&root.join("elsewhere").join("WireSpot-9.9.9.exe"), &dir), "outside the folder");
+        assert!(!is_update_file(&dir.join("..").join("elsewhere").join("WireSpot-9.9.9.exe"), &dir), "climbing out with ..");
+        assert!(!is_update_file(&dir.join("WireSpot-1.0.0.exe"), &dir), "a file that isn't there");
+        let _ = fs::remove_dir_all(&root);
+    }
 }

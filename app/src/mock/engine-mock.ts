@@ -40,6 +40,10 @@ export function createMockEngine(emit: Emit) {
         asked: false,
     }
 
+    // ?update=demo pretends a newer version is out (trying the update dialog in a browser)
+    const fakeUpdate = new URLSearchParams(location.search).get('update') === 'demo'
+    let updateCancelled = false
+
     const later = (ms: number, fn: () => void) => { s.timers.push(setTimeout(fn, ms)) }
     const log = (text: string, level = 'ok', source = 'app') => {
         s.journal.push({ ts: Date.now() / 1000, source, level, text })
@@ -138,7 +142,7 @@ export function createMockEngine(emit: Emit) {
 
     function hello(): Hello {
         return {
-            app: 'WireSpot', version: '0.4.0', tagline: 'VPN × Mobile Hotspot', website: 'https://wirespot.vercel.app',
+            app: 'WireSpot', version: '0.5.0', tagline: 'VPN × Mobile Hotspot', website: 'https://wirespot.vercel.app',
             terms_version: '3', privacy_version: '3', installed: false, admin: true, autostarted: false,
             proton_guide: 'https://protonvpn.com/support/wireguard-configurations',
             doctor_sections: [['quick', 'Quick'], ['wifi', 'Wi-Fi'], ['vpn', 'VPN'], ['hotspot', 'Hotspot'], ['ics', 'Sharing'], ['network', 'Network'], ['clients', 'Devices'], ['full', 'Full']],
@@ -386,6 +390,35 @@ export function createMockEngine(emit: Emit) {
         activity: ({ limit = 500 }) => s.journal.slice(-limit),
         open: ({ target }) => { toast('Opens in the desktop app', `(${target})`); return true },
         uninstall: () => { later(1500, () => emit('uninstalled', { message: 'WireSpot was removed. Your settings and VPN profiles were kept.' })); return true },
+        // updates: the preview is the newest version (add ?update=demo to pretend a newer one is out)
+        update_check: async () => {
+            await new Promise(r => setTimeout(r, 400))
+            const current = hello().version
+            const [major, minor] = current.split('.').map(Number)
+            return fakeUpdate
+                ? {
+                    current, latest: `${major}.${minor + 1}.0`, available: true, size: 31_620_608,
+                    notes: '**New**\n- A sample change, to show how an update looks.\n\n**Fixed**\n- A sample fix.',
+                    published_at: new Date().toISOString(), page: 'https://github.com/svyixiu/WireSpot/releases/latest',
+                }
+                : { current, latest: current, available: false, notes: '', published_at: '', size: 0, page: '' }
+        },
+        update_download: () => {
+            if (!fakeUpdate) throw new Error('Updates are only downloaded in the desktop app.')
+            updateCancelled = false
+            const total = 31_620_608
+            let done = 0
+            const tick = () => {
+                if (updateCancelled) return emit('update_failed', { cancelled: true, error: '' })
+                done = Math.min(total, done + 1_100_000)
+                emit('update_progress', { downloaded: done, total })
+                if (done < total) setTimeout(tick, 100)
+                else emit('update_ready', { path: 'C:\\ProgramData\\WireSpot\\updates\\WireSpot-demo.exe' })
+            }
+            setTimeout(tick, 100)
+            return true
+        },
+        update_cancel: () => { updateCancelled = true; return true },
         quit: () => true,
     }
 

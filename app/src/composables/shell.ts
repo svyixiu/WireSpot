@@ -12,6 +12,8 @@ export interface ShellInfo {
     installed_exe: string;
     installed_exists: boolean;
     dev: boolean;
+    /** started by an update (Settings → Check for updates): install over the old copy and open it */
+    update?: boolean;
 }
 
 export type ShellMode = 'loading' | 'setup' | 'app'
@@ -30,9 +32,11 @@ export const useShell = createGlobalState(() => {
         ? invoke<ShellInfo>('shell_info')
         : Promise.resolve<ShellInfo>({
             setup: new URLSearchParams(location.search).has('setup'),
-            version: '0.4.0', exe: 'C:\\Users\\you\\Downloads\\WireSpot.exe',
+            version: '0.5.0', exe: 'C:\\Users\\you\\Downloads\\WireSpot.exe',
             installed_exe: 'C:\\Users\\you\\AppData\\Local\\Programs\\WireSpot\\WireSpot.exe',
             installed_exists: false, dev: true,
+            // ?setup&update=apply: what a downloaded update does (installs itself and reopens)
+            update: new URLSearchParams(location.search).get('update') === 'apply',
         }))
         .then(i => {
             info.value = i
