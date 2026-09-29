@@ -1,0 +1,180 @@
+  <main>
+    <section class="hero wrap">
+      <div class="hero-copy">
+        <p class="eyebrow">Windows 10 / 11 <span class="accent">·</span> Open source</p>
+        <h1>Your hotspot, through your VPN.</h1>
+        <p class="hero-lead">Turn your Windows laptop into a Wi-Fi hotspot that routes connected devices through a WireGuard profile or the NordVPN desktop app. Your phone, console or tablet shares the VPN connection.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="{{download}}">{{icon:arrow-down}} Download for Windows</a>
+          <a class="button" href="https://github.com/svyixiu/WireSpot">{{icon:terminal}} View source</a>
+        </div>
+        <p class="download-note">Version {{version}} · one file, {{size}}, installs itself · WireGuard or NordVPN desktop app</p>
+      </div>
+
+      <div class="app glass" aria-label="The WireSpot app, live">
+        <div class="app-bar">
+          <div class="lights"><i></i><i></i><i></i></div>
+          <div class="app-brand"><img src="{{logo}}" width="20" height="20" alt=""> WireSpot</div>
+          <div class="app-tabs"><span class="on">Home</span><span>Devices</span><span>Profiles</span><span>Hotspot</span></div>
+        </div>
+        <div class="app-body">
+          <div class="app-hero paper">
+            <span class="live"><span class="dot-live"></span> live</span>
+            <p class="eyebrow">WireSpot · VPN × Mobile Hotspot</p>
+            <h3>You're live.</h3>
+            <p>WireSpot-4F2A is sharing NL-FREE#12 · Netherlands. Phones and consoles that join use the VPN.</p>
+            <span class="pill dark">{{icon:power}} Disconnect</span> <span class="pill">Pause 15 minutes</span>
+          </div>
+          <div class="app-row">
+            <div class="app-card glass">
+              <p class="eyebrow">Status</p>
+              <div class="kv"><span>VPN</span><span>NL-FREE#12</span></div>
+              <div class="kv"><span>Exit IP</span><span>185.107.56.40</span></div>
+              <div class="kv"><span>Mode</span><span>balanced · DNS locked</span></div>
+              <div class="kv"><span>Devices</span><span>1 connected</span></div>
+            </div>
+            <div class="app-card glass">
+              <p class="eyebrow">Devices</p>
+              <div class="waiting">
+                <strong>iPhone</strong>
+                <small>wants to join · 192.168.137.61</small>
+                <div class="row"><span class="pill clay">Allow</span><span class="pill danger">Block</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="section wrap">
+      <div class="section-head">
+        <p class="eyebrow">01 <span class="accent">/</span> The route</p>
+        <h2>One path out.</h2>
+        <p>WireSpot starts Windows Mobile Hotspot from a validated VPN connection. Use a WireSpot-managed WireGuard profile or connect in the NordVPN desktop app.</p>
+      </div>
+      <div class="route" aria-label="Laptop to VPN tunnel to Mobile Hotspot to your devices">
+        <div class="route-node glass">{{icon:laptop}}<strong>Windows laptop</strong><span>Wi-Fi, Ethernet or USB uplink</span></div>
+        <div class="route-node paper">{{icon:shield}}<strong>VPN tunnel</strong><span>A WireGuard profile or the NordVPN app</span></div>
+        <div class="route-node glass">{{icon:wifi}}<strong>Mobile Hotspot</strong><span>Windows shares the tunnel</span></div>
+        <div class="route-node glass">{{icon:phone}}<strong>Your devices</strong><span>Phone, tablet, console</span></div>
+      </div>
+      <p class="note">{{icon:info}} WireSpot verifies the hotspot source and watches for a path around the VPN. If protection fails, its guard stops the hotspot.</p>
+    </section>
+
+    <section id="features" class="section wrap">
+      <div class="section-head">
+        <p class="eyebrow">02 <span class="accent">/</span> Built for control</p>
+        <h2>Everything in one place.</h2>
+        <p>Use the desktop app, its tray icon or the CLI. They share live state and one activity journal.</p>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card glass">{{icon:shield-check}}<h3>Go live with confidence</h3><p>Preflight checks, tunnel verification, profile health and a quick speed test. Choose balanced hotspot protection or strict VPN-only protection.</p></article>
+        <article class="feature-card glass">{{icon:phone}}<h3>Approve devices</h3><p>New devices wait for your decision before they get internet access. Allow, block and remember devices from the app, a pop-up or the CLI.</p></article>
+        <article class="feature-card glass">{{icon:lock}}<h3>Keep DNS on the tunnel</h3><p>DNS lock and a fail-closed guard help keep hotspot traffic on the intended route as connections change.</p></article>
+        <article class="feature-card glass">{{icon:server}}<h3>Choose your VPN mode</h3><p>Import WireGuard .conf files, or enable Profile-less Mode to detect and validate NordVPN. WireSpot never asks for NordVPN credentials.</p></article>
+        <article class="feature-card glass">{{icon:terminal}}<h3>App and CLI in sync</h3><p>Use the window or a command shell with autocomplete. Actions, pause timers, guard state and device approvals stay aligned.</p></article>
+        <article class="feature-card glass">{{icon:sliders}}<h3>Fits your routine</h3><p>Pause and auto-resume, start with Windows without a logon UAC prompt, pick a theme, and uninstall with a choice to keep or delete your data.</p></article>
+      </div>
+    </section>
+
+    <section class="section wrap">
+      <div class="split">
+        <div>
+          <p class="eyebrow">03 <span class="accent">/</span> Device approval</p>
+          <h2>You decide who joins.</h2>
+          <p>When approval is on, a new device appears as a request, even while WireSpot is in the tray. WireSpot blocks its network access until you allow it by pinning its hotspot IP to a sink MAC address on the laptop.</p>
+          <p class="muted">The block is applied after the device's first packet, so there can be about a one-second window. A device that rejoins with a randomized MAC address asks again. Approval is enforced only while WireSpot runs.</p>
+        </div>
+        <div class="popup paper">
+          <div class="popup-head">
+            <span class="avatar">{{icon:phone}}</span>
+            <div><p class="eyebrow">New device · waiting</p><strong>iPhone wants to join</strong></div>
+            <span class="dot-wait"></span>
+          </div>
+          <p>iPhone · 192.168.137.61. It has no network until you allow it.</p>
+          <div class="row"><span class="pill dark">{{icon:check}} Allow</span><span class="pill danger">{{icon:ban}} Block</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section wrap">
+      <div class="split">
+        <div>
+          <p class="eyebrow">04 <span class="accent">/</span> What it changes</p>
+          <h2>Know what runs.</h2>
+          <p>WireSpot runs as administrator and starts Windows Mobile Hotspot. In profile mode it creates a WireGuard tunnel service. In NordVPN mode it validates the external tunnel and installs forwarding protection; NordVPN remains managed by its own app. WireSpot removes its own changes when hosting stops.</p>
+          <p>Settings and profiles stay on your PC. The hotspot password is stored in plain text in your local settings file, so use a unique one.</p>
+        </div>
+        <div class="requirements glass">
+          <h3>Before you install</h3>
+          <div>{{icon:check}} Windows 10 or 11</div>
+          <div>{{icon:check}} WireGuard or the NordVPN desktop app</div>
+          <div>{{icon:check}} A Wi-Fi adapter that supports Mobile Hotspot</div>
+          <div>{{icon:check}} Administrator access</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section wrap">
+      <div class="section-head">
+        <p class="eyebrow">05 <span class="accent">/</span> Get started</p>
+        <h2>From download to online.</h2>
+      </div>
+      <div class="steps">
+        <div class="glass"><b>1</b><h3>Choose a VPN</h3><p>Install <a href="https://www.wireguard.com/install/">WireGuard for Windows</a> for .conf profiles, or connect in the NordVPN desktop app.</p></div>
+        <div class="glass"><b>2</b><h3>Run WireSpot.exe</h3><p>It shows a short installer: agree to the Terms, choose your shortcuts and Start with Windows. Or run it without installing.</p></div>
+        <div class="glass"><b>3</b><h3>Set up and go live</h3><p>Import a WireGuard .conf, or enable Profile-less Mode for NordVPN. Set a hotspot name and password, then press Go live.</p></div>
+      </div>
+    </section>
+
+    <section id="guide" class="section wrap">
+      <div class="section-head">
+        <p class="eyebrow">06 <span class="accent">/</span> Your VPN profile</p>
+        <h2>Get a Proton .conf.</h2>
+        <p>You can bring a WireGuard profile from any compatible provider. Here's the Proton VPN path, step by step.</p>
+      </div>
+      <div class="config-guide">
+        <ol class="glass">
+          <li><strong>Create a Proton VPN account or sign in.</strong><span>Open the <a href="https://account.protonvpn.com/">Proton VPN account site</a>. WireSpot never asks for your account password.</span></li>
+          <li><strong>Go to Downloads → WireGuard configuration.</strong><span>Choose Windows as the platform, give the config a name, and pick the VPN options available on your plan.</span></li>
+          <li><strong>Choose a server in the country you want.</strong><span>Proton also offers a recommended server. Click Create, then Download to save the <code>.conf</code> file.</span></li>
+          <li><strong>Import it into WireSpot.</strong><span>Open Profiles → Import a .conf, review the details, then choose Go live. Keep the file private: it contains a VPN key.</span></li>
+        </ol>
+        <div class="guide-aside paper">
+          {{icon:file}}
+          <h3>Need the exact screens?</h3>
+          <p>Proton's official guide shows each step. Server choices and options can vary by plan.</p>
+          <a class="button cream" href="https://protonvpn.com/support/wireguard-configurations">Open Proton's guide {{icon:external}}</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" class="section wrap">
+      <div class="section-head">
+        <p class="eyebrow">07 <span class="accent">/</span> Questions</p>
+        <h2>Good to know.</h2>
+      </div>
+      <div class="faq glass">
+        <details><summary>Do I need Proton VPN?</summary><p>No. WireSpot accepts WireGuard .conf profiles from compatible providers and supports an externally connected NordVPN desktop app in Profile-less Mode.</p></details>
+        <details><summary>Can I use Ethernet or USB for my laptop's internet?</summary><p>Yes. WireSpot detects the uplink from Windows routing. Your Wi-Fi radio still hosts Mobile Hotspot.</p></details>
+        <details><summary>Does it send my VPN keys anywhere?</summary><p>No. Configuration files stay on your PC. WireSpot checks its exit IP through ipify while connected. A speed test contacts Cloudflare only when you start it; it sends generated bytes, never your VPN keys.</p></details>
+        <details><summary>Can I check a profile before connecting?</summary><p>Yes. Check resolves and pings its server. Some servers ignore ping, so a missing response doesn't mean the VPN is broken. Once connected, WireSpot can verify a recent WireGuard handshake.</p></details>
+        <details><summary>What happens if the VPN drops?</summary><p>WireSpot monitors the VPN route and stops hosting if protection fails. NordVPN mode also keeps persistent forwarding rules in place until the hotspot is confirmed off.</p></details>
+        <details><summary>How do I update?</summary><p>Download the new WireSpot.exe and run it. A running WireSpot hands over to it, and its installer updates your copy; your settings and profiles stay.</p></details>
+      </div>
+    </section>
+
+    <section class="section wrap">
+      <div class="closing paper">
+        <div>
+          <p class="eyebrow">Open source <span class="accent">/</span> GPL-3.0-only</p>
+          <h2>See how it works.</h2>
+          <p>The source, tests and build instructions are on GitHub. WireSpot is unofficial and not affiliated with Nord Security, Proton AG, WireGuard LLC, Jason A. Donenfeld or Microsoft.</p>
+        </div>
+        <div class="closing-actions">
+          <a class="button primary" href="{{download}}">{{icon:arrow-down}} Download for Windows</a>
+          <a class="text-link" href="https://github.com/svyixiu/WireSpot">Explore the source {{icon:external}}</a>
+        </div>
+      </div>
+    </section>
+  </main>
