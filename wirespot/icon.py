@@ -19,11 +19,11 @@ from pathlib import Path
 CLAY = (217, 119, 87)
 SHIMMER = (235, 159, 127)
 CRAIL = (193, 95, 60)
-CREAM = (250, 249, 245)
+CREAM = (245, 235, 216)      # a warm cream, softer than white on the clay tile
 DARK = (31, 30, 29)
 STONE = (176, 174, 165)
 
-ICON_VERSION = "3"   # bump when the artwork changes (invalidates cached tray icons)
+ICON_VERSION = "4"   # bump when the artwork changes (invalidates cached tray icons)
 
 # state -> (badge colour, mark colour, bolt colour)
 STYLES = {
@@ -36,10 +36,56 @@ STYLES = {
 }
 
 # ------------------------------------------------------------------ geometry (unit square, y down)
-CORNER, MARGIN = 0.22, 0.04
-BOLT = [(0.58, 0.12), (0.29, 0.55), (0.47, 0.55),
-        (0.38, 0.89), (0.73, 0.43), (0.55, 0.43), (0.66, 0.12)]
+CORNER, MARGIN = 0.28, 0.04
+# A soft, full bolt: every corner, the tips included, is rounded off by a curve
+# that starts BOLT_ROUND along each edge, so nothing about it is sharp.
+BOLT_CORNERS = [(0.53, 0.125), (0.245, 0.565), (0.465, 0.565),
+                (0.39, 0.895), (0.765, 0.43), (0.545, 0.43), (0.70, 0.125)]
+BOLT_ROUND = 0.085
+BOLT_TIP = 0.03          # the smallest radius any corner gets, so even the narrow tips end in a round
 PAUSE = ((0.34, 0.45), (0.55, 0.66))         # x ranges of the two pause bars
+
+
+def _rounded_corners(corners=BOLT_CORNERS, r=BOLT_ROUND):
+    """Each corner as (start, corner, end): a quadratic curve from the edge before it to the edge after it."""
+    out = []
+    n = len(corners)
+    for i, p in enumerate(corners):
+        a, b = corners[i - 1], corners[(i + 1) % n]
+        la, lb = math.dist(p, a), math.dist(p, b)
+        # a narrow angle needs a longer curve for the same roundness
+        cos = ((a[0] - p[0]) * (b[0] - p[0]) + (a[1] - p[1]) * (b[1] - p[1])) / (la * lb)
+        half = math.acos(max(-1.0, min(1.0, cos))) / 2
+        t = min(max(r, BOLT_TIP / math.tan(half)), la * 0.45, lb * 0.45)
+        start = (p[0] + (a[0] - p[0]) * t / la, p[1] + (a[1] - p[1]) * t / la)
+        end = (p[0] + (b[0] - p[0]) * t / lb, p[1] + (b[1] - p[1]) * t / lb)
+        out.append((start, p, end))
+    return out
+
+
+def _bolt_outline(steps: int = 10) -> list[tuple[float, float]]:
+    """The rounded bolt as a polygon, for the pixel renderer."""
+    pts = []
+    for s, p, e in _rounded_corners():
+        for k in range(steps + 1):
+            u = k / steps
+            pts.append(((1 - u) ** 2 * s[0] + 2 * (1 - u) * u * p[0] + u * u * e[0],
+                        (1 - u) ** 2 * s[1] + 2 * (1 - u) * u * p[1] + u * u * e[1]))
+    return pts
+
+
+def bolt_path(scale: float = 1.0) -> str:
+    """The rounded bolt as an SVG path (the app draws the same path)."""
+    def f(pt):
+        return f"{pt[0] * scale:.2f} {pt[1] * scale:.2f}"
+    corners = _rounded_corners()
+    d = f"M{f(corners[-1][2])}"
+    for s, p, e in corners:
+        d += f"L{f(s)}Q{f(p)} {f(e)}"
+    return d + "Z"
+
+
+BOLT = _bolt_outline()
 
 
 def _rounded_square(x: float, y: float) -> bool:
@@ -119,18 +165,17 @@ def svg(state: str = "live", size: int = 256) -> str:
         return "#%02X%02X%02X" % c
 
     s = size
-    pts = " ".join(f"{x * s:.1f},{y * s:.1f}" for x, y in BOLT)
     m, r = MARGIN * s, CORNER * s
     if state == "paused":
         symbol = "".join(f'<rect x="{a * s:.1f}" y="{0.30 * s:.1f}" width="{(b-a) * s:.1f}" '
-                         f'height="{0.42 * s:.1f}" rx="{0.025 * s:.1f}" fill="{hexc(bolt)}"/>'
+                         f'height="{0.42 * s:.1f}" rx="{0.045 * s:.1f}" fill="{hexc(bolt)}"/>'
                          for a, b in PAUSE)
     elif state == "error":
         symbol = (f'<rect x="{0.44 * s:.1f}" y="{0.20 * s:.1f}" width="{0.12 * s:.1f}" '
-                  f'height="{0.40 * s:.1f}" rx="{0.02 * s:.1f}" fill="{hexc(bolt)}"/>'
+                  f'height="{0.40 * s:.1f}" rx="{0.06 * s:.1f}" fill="{hexc(bolt)}"/>'
                   f'<circle cx="{0.5 * s:.1f}" cy="{0.76 * s:.1f}" r="{0.075 * s:.1f}" fill="{hexc(bolt)}"/>')
     else:
-        symbol = f'<polygon points="{pts}" fill="{hexc(bolt)}"/>'
+        symbol = f'<path d="{bolt_path(s)}" fill="{hexc(bolt)}"/>'
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {s} {s}" width="{s}" height="{s}">\n'
             f'  <title>WireSpot</title>\n'
             f'  <rect x="{m:.1f}" y="{m:.1f}" width="{s - 2 * m:.1f}" height="{s - 2 * m:.1f}" rx="{r:.1f}" '
