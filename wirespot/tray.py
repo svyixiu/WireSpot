@@ -35,14 +35,12 @@ kernel32 = ctypes.WinDLL("kernel32") if os.name == "nt" else None
 
 LRESULT = ctypes.c_ssize_t
 WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM) if os.name == "nt" else None
-WM_APP = 0x8000
+from .traywin import (NIM_ADD, NIM_DELETE, NIM_MODIFY, NOTIFYICONDATAW, WINDOW_CLASS, WM_APP,  # noqa: E402,F401
+                      WM_OPENWINDOW, WM_QUITAPP, WM_UNINSTALL)
+
 WM_TRAY, WM_REFRESH, WM_SHOWPANEL, WM_QUITTRAY = WM_APP + 1, WM_APP + 2, WM_APP + 3, WM_APP + 4
-WM_OPENWINDOW, WM_QUITAPP, WM_UNINSTALL = WM_APP + 5, WM_APP + 6, WM_APP + 7    # from other WireSpot processes
 WM_LBUTTONUP, WM_LBUTTONDBLCLK, WM_RBUTTONUP = 0x0202, 0x0203, 0x0205
-NIM_ADD, NIM_MODIFY, NIM_DELETE = 0, 1, 2
 NIF_MESSAGE, NIF_ICON, NIF_TIP, NIF_SHOWTIP = 0x1, 0x2, 0x4, 0x80
-# WIRESPOT_INSTANCE lets a test copy run beside your real WireSpot without handing off to it.
-WINDOW_CLASS = "WireSpotTrayWindow" + os.environ.get("WIRESPOT_INSTANCE", "")
 
 
 class POINT(ctypes.Structure):
@@ -63,13 +61,6 @@ if os.name == "nt":
                     ("cbClsExtra", ctypes.c_int), ("cbWndExtra", ctypes.c_int), ("hInstance", wintypes.HINSTANCE),
                     ("hIcon", wintypes.HICON), ("hCursor", wintypes.HANDLE), ("hbrBackground", wintypes.HBRUSH),
                     ("lpszMenuName", wintypes.LPCWSTR), ("lpszClassName", wintypes.LPCWSTR), ("hIconSm", wintypes.HICON)]
-
-    class NOTIFYICONDATAW(ctypes.Structure):
-        _fields_ = [("cbSize", wintypes.DWORD), ("hWnd", wintypes.HWND), ("uID", wintypes.UINT),
-                    ("uFlags", wintypes.UINT), ("uCallbackMessage", wintypes.UINT), ("hIcon", wintypes.HICON),
-                    ("szTip", ctypes.c_wchar * 128), ("dwState", wintypes.DWORD), ("dwStateMask", wintypes.DWORD),
-                    ("szInfo", ctypes.c_wchar * 256), ("uVersion", wintypes.UINT), ("szInfoTitle", ctypes.c_wchar * 64),
-                    ("dwInfoFlags", wintypes.DWORD), ("guidItem", ctypes.c_byte * 16), ("hBalloonIcon", wintypes.HICON)]
 
     user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
     user32.DefWindowProcW.restype = LRESULT

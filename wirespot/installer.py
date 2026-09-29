@@ -1,8 +1,9 @@
 """Install / uninstall WireSpot (per-user, no MSI).
 
-Install (WireSpotSetup.exe):
-  * program files  -> %LOCALAPPDATA%\\Programs\\WireSpot (WireSpot.exe,
-                      WireSpotCLI.exe, install.json marker)
+Install (WireSpot.exe started from anywhere else shows its installer):
+  * program files  -> %LOCALAPPDATA%\\Programs\\WireSpot (WireSpot.exe, the
+                      desktop app; WireSpotEngine.exe, which it runs;
+                      WireSpotCLI.exe; install.json marker)
   * your data      -> %APPDATA%\\WireSpot (settings.json, vpn\\, logs\\)
   * one shortcut on the desktop to the app (the CLI opens from the app),
     a Start-menu entry, and an "Apps & features" entry that runs
@@ -34,7 +35,7 @@ from typing import Callable
 from . import APP_NAME, VERSION, autostart, paths
 
 UNINSTALL_KEY = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\WireSpot"
-EXES = ("WireSpot.exe", "WireSpotCLI.exe")
+EXES = ("WireSpot.exe", "WireSpotEngine.exe", "WireSpotCLI.exe")
 Progress = Callable[[str], None]
 
 
@@ -83,7 +84,7 @@ def app_running() -> bool:
         return False
     import ctypes
 
-    from .tray import WINDOW_CLASS
+    from .traywin import WINDOW_CLASS
 
     return bool(ctypes.windll.user32.FindWindowW(WINDOW_CLASS, None))
 
@@ -94,9 +95,30 @@ class AppStillRunning(RuntimeError):
 
 def terminate_running() -> None:
     """Last resort for an older WireSpot that does not understand 'quit' (0.2.0 and earlier).
-    Only the app process is ended; the VPN tunnel and hotspot are Windows services and keep running."""
-    subprocess.run(["taskkill", "/F", "/T", "/IM", "WireSpot.exe"], capture_output=True,
-                   creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
+    Only the app process is ended; the VPN tunnel and hotspot are Windows services and keep running.
+    The process is found by its tray window, never by name: the installer is a WireSpot.exe too."""
+    if os.name != "nt":
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    from .traywin import NIM_DELETE, NOTIFYICONDATAW, WINDOW_CLASS
+
+    user32, shell32 = ctypes.windll.user32, ctypes.windll.shell32
+    user32.FindWindowW.restype = ctypes.c_void_p
+    hwnd = user32.FindWindowW(WINDOW_CLASS, None)
+    if not hwnd:
+        return
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(ctypes.c_void_p(hwnd), ctypes.byref(pid))
+    # take its tray icon down first: a force-ended program can't, and Windows
+    # would keep showing the icon until the mouse passes over it
+    nid = NOTIFYICONDATAW()
+    nid.cbSize, nid.hWnd, nid.uID = ctypes.sizeof(NOTIFYICONDATAW), hwnd, 1
+    shell32.Shell_NotifyIconW(NIM_DELETE, ctypes.byref(nid))
+    if pid.value and pid.value != os.getpid():
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid.value)], capture_output=True,
+                       creationflags=subprocess.CREATE_NO_WINDOW)
     time.sleep(1.5)
 
 
@@ -142,7 +164,7 @@ def close_running_app(timeout: float = 12.0) -> bool:
 
     user32 = ctypes.windll.user32
     user32.FindWindowW.restype = ctypes.c_void_p
-    from .tray import WINDOW_CLASS, WM_QUITAPP
+    from .traywin import WINDOW_CLASS, WM_QUITAPP
 
     hwnd = user32.FindWindowW(WINDOW_CLASS, None)
     if not hwnd:
@@ -203,11 +225,13 @@ def migrate(src: Path, data: Path, progress: Progress) -> int:
 
 
 # ===================================================================== install
-def install(payload: Path, dest: Path | None = None, data: Path | None = None, progress: Progress = lambda s: None,
-            legacy_near: Path | None = None, shortcuts: bool = True, registry: bool = True, desktop: bool = True,
-            start_menu: bool = True, start_with_windows: bool | None = None, migrate_legacy: bool = True,
-            force_close: bool = False, accepted: dict | None = None) -> dict:
-    """``start_with_windows``: True/False sets it, None keeps whatever it was (re-pointed at this copy)."""
+def install(payload: Path | dict[str, Path], dest: Path | None = None, data: Path | None = None,
+            progress: Progress = lambda s: None, legacy_near: Path | None = None, shortcuts: bool = True,
+            registry: bool = True, desktop: bool = True, start_menu: bool = True,
+            start_with_windows: bool | None = None, migrate_legacy: bool = True, force_close: bool = False,
+            accepted: dict | None = None) -> dict:
+    """``payload``: a folder holding EXES, or {name: path} when they live in different folders.
+    ``start_with_windows``: True/False sets it, None keeps whatever it was (re-pointed at this copy)."""
     dest = dest or paths.install_dir()
     data = data or paths.appdata_dir()
     result = {"dest": str(dest), "data": str(data), "moved": 0, "shortcuts": []}
@@ -223,7 +247,7 @@ def install(payload: Path, dest: Path | None = None, data: Path | None = None, p
     progress("Copying WireSpot")
     dest.mkdir(parents=True, exist_ok=True)
     for name in EXES:
-        src = payload / name
+        src = Path(payload[name]) if isinstance(payload, dict) and name in payload else Path(payload) / name
         if not src.is_file():
             raise FileNotFoundError(f"{name} is missing from the setup package")
         _copy_retry(src, dest / name)
@@ -278,14 +302,30 @@ def _rmtree(p: Path) -> bool:
     return not p.exists()
 
 
-def schedule_removal(dest: Path) -> None:
-    """Delete the program files after this process exits (a running exe cannot delete itself)."""
+def local_app_dirs(keep_data: bool) -> list[Path]:
+    """The desktop app's own folders in %LOCALAPPDATA%: its cache (icons, the portable engine)
+    and, unless the data is kept, the window's storage (theme, accent)."""
+    local = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+    dirs = [local / "WireSpot"]
+    if not keep_data:
+        dirs.append(local / "app.wirespot.desktop")
+    return dirs
+
+
+def schedule_removal(dest: Path, extra_dirs: list[Path] = ()) -> None:
+    """Delete the program files (and ``extra_dirs``) after this process exits: a running exe
+    cannot delete itself, and the window's storage stays in use until the app has closed."""
     files = [dest / n for n in (*EXES, paths.INSTALL_MARKER)]
     lst = ",".join(_q(f) for f in files)
     script = (f"for($i=0;$i -lt 60;$i++){{Start-Sleep -Milliseconds 500;"
               f"Remove-Item -LiteralPath {lst} -Force -ErrorAction SilentlyContinue;"
               f"if(-not (Test-Path -LiteralPath {_q(files[0])})){{break}}}};"
               f"try{{[IO.Directory]::Delete({_q(dest)})}}catch{{}}")
+    dirs = [d for d in extra_dirs if d.name.lower() in ("wirespot", "app.wirespot.desktop")]
+    if dirs:
+        still_there = " -or ".join(f"(Test-Path -LiteralPath {_q(d)})" for d in dirs)
+        script += (f";for($i=0;$i -lt 20;$i++){{Remove-Item -LiteralPath {','.join(_q(d) for d in dirs)} -Recurse "
+                   f"-Force -ErrorAction SilentlyContinue;if(-not ({still_there})){{break}};Start-Sleep -Milliseconds 500}}")
     subprocess.Popen(["powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script],
                      creationflags=(subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS) if os.name == "nt" else 0,
                      close_fds=True)
@@ -348,7 +388,7 @@ def uninstall(keep_data: bool, relay=None, settings: dict | None = None, progres
             notes.append(f"could not remove {data}")
     progress("Removing the program")
     if schedule:
-        schedule_removal(dest)
+        schedule_removal(dest, local_app_dirs(keep_data))
     ui.info("WireSpot uninstalled" + (" (settings and VPN profiles kept)" if keep_data else ""))
     msg = ("Settings and VPN profiles were kept in " + str(data)) if keep_data else "Everything was removed."
     if notes:

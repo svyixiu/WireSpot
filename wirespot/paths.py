@@ -1,8 +1,11 @@
 """Filesystem layout.
 
 Three places:
-  * APP_DIR   - where WireSpot.exe / WireSpotCLI.exe live. Installed builds use
-                %LOCALAPPDATA%\\Programs\\WireSpot (marked by install.json).
+  * APP_DIR   - where WireSpot.exe lives. Installed builds use
+                %LOCALAPPDATA%\\Programs\\WireSpot (marked by install.json). The
+                desktop app passes it to its engine as WIRESPOT_APP_DIR, because a
+                portable WireSpot.exe runs its engine and CLI from elsewhere
+                (WIRESPOT_BIN_DIR, see exe()).
   * BASE      - your data: settings.json, vpn\\ (profiles), logs\\.
                 Installed: %APPDATA%\\WireSpot. Portable (settings.json or
                 vpn\\ next to the exe): the exe folder. Source checkout: the
@@ -21,6 +24,9 @@ INSTALL_MARKER = "install.json"
 
 
 def app_dir() -> Path:
+    override = os.environ.get("WIRESPOT_APP_DIR")
+    if override:
+        return Path(override).resolve()
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent.parent
@@ -71,5 +77,8 @@ LEGACY_RUNTIME_DIR = _PROGRAMDATA / "ProtonRelayCLI" / "runtime"
 
 
 def exe(name: str) -> Path:
-    """Path of a sibling executable (WireSpot.exe / WireSpotCLI.exe)."""
+    """Path of one of WireSpot's programs (WireSpot.exe, WireSpotEngine.exe, WireSpotCLI.exe)."""
+    bin_dir = os.environ.get("WIRESPOT_BIN_DIR")
+    if bin_dir and name != "WireSpot.exe":
+        return Path(bin_dir) / name
     return APP_DIR / name

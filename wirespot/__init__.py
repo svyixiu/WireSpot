@@ -5,7 +5,7 @@ Formerly "ProtonRelay CLI".
 
 APP_NAME = "WireSpot"
 TAGLINE = "WireGuard x Mobile Hotspot"
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 WEBSITE = "https://wirespot.vercel.app"
 TERMS_VERSION = "3"
 PRIVACY_VERSION = "3"

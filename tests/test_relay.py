@@ -350,7 +350,10 @@ class StopTests(RelayTestCase):
         r.stop_guard()
         b.calls.clear()
         b.hotspot_status = lambda *a, **k: ({"ok": True, "state": "On"}, "")
-        with Capture(), contextlib.redirect_stdout(io.StringIO()):
+        # like the rest of the backend, WireGuard itself is faked: the test must not
+        # depend on WireGuard for Windows being installed on the machine running it
+        with Capture(), contextlib.redirect_stdout(io.StringIO()), \
+                mock.patch("wirespot.wireguard.find_wireguard", return_value=Path("wireguard.exe")):
             self.assertTrue(r.stop(self.settings))
         names = b.names()
         self.assertIn(("dns_lock", "remove"), b.calls)

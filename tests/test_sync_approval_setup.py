@@ -372,6 +372,34 @@ class InstallerTests(TempDirs):
                 with mock.patch.object(sys, "executable", str(port / "WireSpot.exe")):
                     self.assertEqual(paths.base_dir(), port)
 
+    def test_install_takes_programs_from_different_folders(self):
+        # the desktop app installs itself plus the engine and CLI it unpacked elsewhere
+        app, unpacked = self.d / "Downloads", self.d / "Local" / "WireSpot" / "bin"
+        app.mkdir(parents=True)
+        unpacked.mkdir(parents=True)
+        files = {"WireSpot.exe": app / "WireSpot.exe", "WireSpotEngine.exe": unpacked / "WireSpotEngine.exe",
+                 "WireSpotCLI.exe": unpacked / "WireSpotCLI.exe"}
+        for name, path in files.items():
+            path.write_bytes(b"MZ" + name.encode())
+        dest, data = self.d / "Programs" / "WireSpot", self.d / "Roaming" / "WireSpot"
+        with mock.patch.object(installer, "close_running_app", return_value=True), \
+                mock.patch.object(installer.autostart, "is_enabled", return_value=False):
+            installer.install(files, dest, data, shortcuts=False, registry=False)
+        for name in installer.EXES:
+            self.assertEqual((dest / name).read_bytes(), b"MZ" + name.encode())
+
+    def test_the_app_tells_its_engine_where_it_lives(self):
+        app, unpacked = self.d / "Programs" / "WireSpot", self.d / "bin"
+        with mock.patch.dict(os.environ, {"WIRESPOT_APP_DIR": str(app), "WIRESPOT_BIN_DIR": str(unpacked)}):
+            self.assertEqual(paths.app_dir(), app.resolve())
+            self.assertEqual(paths.exe("WireSpotCLI.exe"), unpacked / "WireSpotCLI.exe")
+        self.assertEqual(paths.exe("WireSpot.exe"), paths.APP_DIR / "WireSpot.exe")
+
+    def test_uninstall_only_schedules_wirespots_own_local_folders(self):
+        with mock.patch.dict(os.environ, {"LOCALAPPDATA": str(self.d / "Local")}):
+            self.assertEqual([d.name for d in installer.local_app_dirs(True)], ["WireSpot"])
+            self.assertEqual([d.name for d in installer.local_app_dirs(False)], ["WireSpot", "app.wirespot.desktop"])
+
 
 # ===================================================================== CLI line editor
 class LineEditorResizeTests(unittest.TestCase):
